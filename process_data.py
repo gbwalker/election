@@ -18,10 +18,24 @@ raw.columns = ['id_filer', 'amendment', 'report', 'election', 'image', 'type', '
 
 ### Process the data.
 
+# Fix NA values.
+
 # Copy the raw dataframe.
 
 df = raw[:]
 
-# Get first and last names.
+# Get first and last names and assign them to new columns.
 
-df[['firstname']] = df['name'].apply(split(' '))
+names = df['name'].str.split(' ', expand=True)
+
+df = df.assign(lastname=names[0].str.replace(',', '').str.title())
+
+df = df.assign(firstname=names[1].str.title())
+
+del df['name']
+
+# Remove other variables that don't add any predictive value, such as the image number, transaction ID, and FEC record (and possibly memo code).
+# Delete 22Y entries, which are refunded donations?
+
+del df['image'], df['id_transaction'], df['fec_record']
+
