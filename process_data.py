@@ -40,9 +40,9 @@ raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type
 
 df = raw[:]
 
-# Improve look of cities.
+# Improve look of employer, occupation, memo, and cities.
 
-df = df.assign(city=df.city.str.title())
+df = df.assign(city=df.city.str.title(), employer=df.employer.str.title(), occupation=df.occupation.str.title(), memo_text=df.memo_text.str.title())
 
 ## Get first and last names and assign them to new columns.
 
@@ -61,7 +61,7 @@ del df['name']
 # Remove other variables that don't add any predictive value, such as the image number, transaction ID, and FEC record (and possibly memo code).
 # Delete 22Y entries, which are refunded donations?
 
-del df['image'], df['id_transaction'], df['fec_record'], df['report']
+del df['image'], df['id_transaction'], df['fec_record']
 
 ## Split the zip code.
 
@@ -138,13 +138,65 @@ df = df.assign(date = df.date.apply(string_to_date))
 
 amendments = {'N':'New', 'A':'Amendment', 'T':'Termination'}
 elections = {'P':'Primary', 'G':'General', 'O':'Other', 'C':'Convention', 'R':'Runoff', 'S':'Special', 'E':'Recount'}
+entities = {'CAN': 'Candidate', 'CCM':'Candidate Committee', 'COM':'Committee', 'IND':'Individual', 'ORG':'Organization', 'PAC':'Political Action Committee', 'PTY':'Party Organization'}
 
 df['amendment'] = df['amendment'].map(amendments)
 df['election'] = df['election'].map(elections)
+df['entity'] = df['entity'].map(entities)
 
 ### Scrape the FEC websites for more mapping pairs.
 
+# This function takes in cleaned HTML tags and returns a dictionary of all the mapping pairs.
 
+def map_pairs(soup, type):
+    
+    # Check whether the type is a report or transaction.
+
+    options = {'report':3, 'transaction':2}
+
+    position = options.get(type)
+
+    # Initialize an empty dictionary to store values and a counter.
+
+    mapping = {}
+    counter = 0
+
+    for tag in soup:
+
+        # Check if the element is in the right position in the text.
+
+        if counter > 2 and counter % position == 0:
+
+            # Clean the tag and get the next item in the list to use as the value.
+
+            key = str(tag).replace('</td>', '').replace('<td>', '')
+            val = str(soup[counter + 1]).replace('</td>', '').replace('<td>', '')
+
+            mapping.update({key:val})
+        
+        counter += 1
+
+    return mapping
+
+
+# Get the report types.
+
+raw_report_types = requests.get('https://www.fec.gov/campaign-finance-data/report-type-code-descriptions/').text
+soup_report_types = BeautifulSoup(raw_report_types)
+report_types = soup_report_types.find_all('td')
+report_mapping = map_pairs(report_types, 'report')
+
+# Get the transaction types.
+
+raw_transaction_types = requests.get('https://www.fec.gov/campaign-finance-data/transaction-type-code-descriptions/').text
+soup_transaction_types = BeautifulSoup(raw_transaction_types)
+transaction_types = soup_transaction_types.find_all('td')
+transaction_mapping = map_pairs(transaction_types, 'transaction')
+
+# Map all of the scraped values.
+
+df['report'] = df['report'].map(report_mapping)
+df['type'] = df['type'].map(transaction_mapping)
 
 ##############################
 ### Import the committee data.
@@ -163,6 +215,18 @@ raw_committee.columns = ['id_committee', 'name', 'treasurer', 'street1', 'street
 # Copy only the committee information of interest.
 
 df_committee = raw_committee[['id_committee', 'name', 'designation', 'type', 'party', 'frequency', 'category', 'connection', 'id_candidate']]
+
+# Improve the look of the organizations.
+
+df_committee = df_committee.assign(name=df_committee.name.str.title(), connection=df_committee.connection.str.title())
+
+# Map full words to abbreviations, as with the donations dataframe.
+
+designations = {'A':'Authorized by a candidate', 'B':'Lobbyist/Registrant PAC', 'D':'Leadership PAC', 'J':'Joint fundraiser', 'P':'Principal campaign committee', 'U':'Unauthorized'}
+types = {}
+parties = {}
+frequencies = {'A':'Administratively terminated', 'D':'Debt', 'M':'Monthly filer', 'T':'Terminated', 'W':'Waived'}
+categories = {'C':'Corporation', 'L':'Labor organization', 'M':'Membership organization', 'T':'Trade organization', 'V':'Cooperative', 'W':'Corporation without capital stock'}
 
 # Join the committee info with the original donation data.
 
