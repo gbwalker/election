@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 # Make dataframes appear as full tables, not wrapped.
 
 pd.set_option('expand_frame_repr', False)
+# pd.set_option('display.max_columns', 40)
 
 #####################
 # RAW DATA PROCESSING
@@ -20,7 +21,7 @@ pd.set_option('expand_frame_repr', False)
 # Read the 2019-2020 individual contribution data.
 
 raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020/itcont.txt',
-                  header=None, sep='|', nrows=10000)
+                  header=None, sep='|', nrows=1000)
 
 # Add the header from FEC.gov to the raw file.
 
@@ -32,9 +33,9 @@ raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-20
 raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip',
                'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
 
+#####################
 ### Process the data.
-
-# Fix NA values.
+#####################
 
 # Copy the raw dataframe.
 
@@ -43,6 +44,10 @@ df = raw[:]
 # Improve look of employer, occupation, memo, and cities.
 
 df = df.assign(city=df.city.str.title(), employer=df.employer.str.title(), occupation=df.occupation.str.title(), memo_text=df.memo_text.str.title())
+
+# Make sure ZIP codes are strings.
+
+df['zip'] = df['zip'].astype('str')
 
 ## Get first and last names and assign them to new columns.
 
@@ -62,6 +67,18 @@ del df['name']
 # Delete 22Y entries, which are refunded donations?
 
 del df['image'], df['id_transaction'], df['fec_record']
+
+
+
+
+
+
+### NEXT STEP IS TO TURN THE ZIP PARSER INTO A FUNCTION TO CATCH EXCEPTIONS.
+
+
+
+
+
 
 ## Split the zip code.
 
@@ -148,12 +165,15 @@ df['entity'] = df['entity'].map(entities)
 
 # This function takes in cleaned HTML tags and returns a dictionary of all the mapping pairs.
 
-def map_pairs(soup, type):
+def map_pairs(url, type):
     
-    # Check whether the type is a report or transaction.
+    raw = requests.get(url).text
+    soup = BeautifulSoup(raw)
+    clean_soup = soup.find_all('td')
 
-    options = {'report':3, 'transaction':2}
+    # Check whether the type is a report or transaction for determining which lines to copy.
 
+    options = {'report':3, 'types':3, 'parties':3, 'transaction':2}
     position = options.get(type)
 
     # Initialize an empty dictionary to store values and a counter.
@@ -161,7 +181,7 @@ def map_pairs(soup, type):
     mapping = {}
     counter = 0
 
-    for tag in soup:
+    for tag in clean_soup:
 
         # Check if the element is in the right position in the text.
 
@@ -170,7 +190,7 @@ def map_pairs(soup, type):
             # Clean the tag and get the next item in the list to use as the value.
 
             key = str(tag).replace('</td>', '').replace('<td>', '')
-            val = str(soup[counter + 1]).replace('</td>', '').replace('<td>', '')
+            val = str(clean_soup[counter + 1]).replace('</td>', '').replace('<td>', '')
 
             mapping.update({key:val})
         
@@ -181,17 +201,11 @@ def map_pairs(soup, type):
 
 # Get the report types.
 
-raw_report_types = requests.get('https://www.fec.gov/campaign-finance-data/report-type-code-descriptions/').text
-soup_report_types = BeautifulSoup(raw_report_types)
-report_types = soup_report_types.find_all('td')
-report_mapping = map_pairs(report_types, 'report')
+report_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/report-type-code-descriptions/', 'report')
 
 # Get the transaction types.
 
-raw_transaction_types = requests.get('https://www.fec.gov/campaign-finance-data/transaction-type-code-descriptions/').text
-soup_transaction_types = BeautifulSoup(raw_transaction_types)
-transaction_types = soup_transaction_types.find_all('td')
-transaction_mapping = map_pairs(transaction_types, 'transaction')
+transaction_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/transaction-type-code-descriptions/', 'transaction')
 
 # Map all of the scraped values.
 
@@ -223,10 +237,26 @@ df_committee = df_committee.assign(name=df_committee.name.str.title(), connectio
 # Map full words to abbreviations, as with the donations dataframe.
 
 designations = {'A':'Authorized by a candidate', 'B':'Lobbyist/Registrant PAC', 'D':'Leadership PAC', 'J':'Joint fundraiser', 'P':'Principal campaign committee', 'U':'Unauthorized'}
-types = {}
-parties = {}
 frequencies = {'A':'Administratively terminated', 'D':'Debt', 'M':'Monthly filer', 'T':'Terminated', 'W':'Waived'}
 categories = {'C':'Corporation', 'L':'Labor organization', 'M':'Membership organization', 'T':'Trade organization', 'V':'Cooperative', 'W':'Corporation without capital stock'}
+
+### Scrape the type and party information, as with the donations.
+
+# Committee type mapping.
+
+type_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/', 'types')
+
+# Party type mapping.
+
+party_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/party-code-descriptions/', 'parties')
+
+# Apply all of the mapping to the committee dataframe.
+
+df_committee['designation'] = df_committee['designation'].map(designations)
+df_committee['type'] = df_committee['type'].map(type_mapping)
+df_committee['party'] = df_committee['party'].map(party_mapping)
+df_committee['frequency'] = df_committee['frequency'].map(frequencies)
+df_committee['category'] = df_committee['category'].map(categories)
 
 # Join the committee info with the original donation data.
 
@@ -236,8 +266,7 @@ df = pd.merge(df, df_committee, how='left', on='id_committee', suffixes=['_donat
 ### Import the candidate data.
 ##############################
 
-
-
+# Next source: https://www.fec.gov/data/browse-data/?tab=bulk-data
 
 # Count how many give outside their state.
 
