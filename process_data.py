@@ -49,17 +49,59 @@ df = df.assign(city=df.city.str.title(), employer=df.employer.str.title(), occup
 
 df['zip'] = df['zip'].astype('str')
 
-## Get first and last names and assign them to new columns.
+### Get first and last names and assign them to new columns.
+# This function takes in a column of names and returns a clean one.
 
-names = df['name'].str.split(' ', expand=True)
+def clean_names(names):
+    
+    # Initialize an empty list for storing the complete names.
+    
+    result = []
+    
+    # Split the names by spacing.
+    
+    names = names.str.split(' ', expand=True)
+    
+    # The last name always comes first.
+    
+    last = names[0].str.replace(',', '').str.title()
+        
+    # Go through every name to check for ones that aren't first or last.
+    # Note this uses a numeric iterator in case there are null values.
+    
+    for n in range(len(names)):
+    
+        # Make sure the person is not 'II,' or 'Jr.'
+        
+        if ',' not in str(names[1][n]) and '.' not in str(names[1][n]):
+        
+            # Use the name as the first name.
+            
+            first = str(names[1][n]).title()
+            
+            # If the second column was empty, use the first column as the first name.
+            
+            if first == 'None':
+                first = last[n]
+                last[n] = ''
+            
+        # Otherwise use the next split on the same corresponding row as long as it's not null.
+        
+        elif str(names[2][n]) != 'None':
+            
+            first = str(names[2][n]).title()
+        
+        else:
+            
+            first = str(names[1][n]).title()
+    
+        result.append(first + ' ' + last[n])
+    
+    return pd.DataFrame(result, columns=['name'])
 
-# First name without the comma and last name.
-# Then delete the full name column.
+# Assign a new name column with the cleaned names using the function above.
 
-df = df.assign(lastname=names[0].str.replace(',', '').str.title())
-df = df.assign(firstname=names[1].str.title())
-
-del df['name']
+df = df.assign(name=clean_names(df.name))
 
 # Remove other variables that don't add any predictive value, such as the image number, transaction ID, and FEC record (and possibly memo code).
 # Delete 22Y entries, which are refunded donations?
@@ -258,19 +300,36 @@ df = pd.merge(df, df_committee, how='left', on='id_committee', suffixes=['_donat
 
 raw_candidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020_candidates/cn.txt', header=None, sep='|')
 
-# Rename the columns.
+# Rename the columns and create a separate df.
 
 raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'election', 'district', 'incumbent', 'status', 'id_committee', 'street', 'street2', 'city', 'state', 'zip']
 
+df_candidate = raw_candidate[:]
 
-######################### NEXT STEP IDEAS
+# Improve the look of candidate names.
+
+df_candidate = df_candidate.assign(candidate=clean_names(df_candidate.candidate))
+
+# Use the mapping for donations and committees (defined above) for the candidates.
+
+df_candidate['party_candidate'] = df_candidate['party_candidate'].map(party_mapping)
+
+elections_candidate = {'H':'House', 'P':'President', 'S':'Senate'}
+df_candidate['election'] = df_candidate['election'].map(elections_candidate)
+
+# Redefine districts and zip codes as strings.
+
+df_candidate['district'] = df_candidate['district'].astype(str).str.replace('.0', '')
+df_candidate['zip'] = df_candidate['zip'].astype(str).str.replace('.0', '')
+
+
+######################### NEXT STEP IDEAS...
 
 # Count how many give outside their state.
 
 # Find the numerical range, average, etc. (plot?) of the donation amounts. Also distribution of locations.
 
 # Find candidate election results. Manipulate the date to determine how early/late donation is.
-
 
 # https: // www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
 # https://www.fec.gov/campaign-finance-data/committee-master-file-description/
