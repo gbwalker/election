@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 # Make dataframes appear as full tables, not wrapped.
 
 pd.set_option('expand_frame_repr', False)
-# pd.set_option('display.max_columns', 40)
+pd.set_option('display.max_columns', 40)
 
 #####################
 # RAW DATA PROCESSING
@@ -30,8 +30,8 @@ raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-20
 # Fix the column names to something more legible.
 # See the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
 
-raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip',
-               'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
+raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip', 'employer', 
+               'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
 
 #####################
 ### Process the data.
@@ -53,12 +53,10 @@ df['zip'] = df['zip'].astype('str')
 
 names = df['name'].str.split(' ', expand=True)
 
-# First name without the comma.
+# First name without the comma and last name.
+# Then delete the full name column.
 
 df = df.assign(lastname=names[0].str.replace(',', '').str.title())
-
-# Last name.
-
 df = df.assign(firstname=names[1].str.title())
 
 del df['name']
@@ -68,23 +66,13 @@ del df['name']
 
 del df['image'], df['id_transaction'], df['fec_record']
 
+### Split the zip code into a main and secondary (extra) code.
 
+# Get only the valid numeric zip codes as a Series. (I.e., only ones with repeating digits.)
 
+zips = df.zip.str.extract(r'(\d+)').loc[:,0]
 
-
-
-### NEXT STEP IS TO TURN THE ZIP PARSER INTO A FUNCTION TO CATCH EXCEPTIONS.
-
-
-
-
-
-
-## Split the zip code.
-
-zips = df['zip']
-
-# Make a separate list of just the very long zip codes.
+# Make a separate list of just the extended zip codes.
 
 zips_long = zips.dropna()[zips.dropna().str.len() > 5]
 
@@ -223,16 +211,16 @@ raw_committee = pd.read_csv(
 
 # Add a new header based on https://www.fec.gov/campaign-finance-data/committee-master-file-description/.
 
-raw_committee.columns = ['id_committee', 'name', 'treasurer', 'street1', 'street2', 'city', 'state',
+raw_committee.columns = ['id_committee', 'committee', 'treasurer', 'street1', 'street2', 'city', 'state',
                          'zip', 'designation', 'type', 'party', 'frequency', 'category', 'connection', 'id_candidate']
 
 # Copy only the committee information of interest.
 
-df_committee = raw_committee[['id_committee', 'name', 'designation', 'type', 'party', 'frequency', 'category', 'connection', 'id_candidate']]
+df_committee = raw_committee[['id_committee', 'committee', 'designation', 'type', 'party', 'frequency', 'category', 'connection', 'id_candidate']]
 
 # Improve the look of the organizations.
 
-df_committee = df_committee.assign(name=df_committee.name.str.title(), connection=df_committee.connection.str.title())
+df_committee = df_committee.assign(committee=df_committee.committee.str.title(), connection=df_committee.connection.str.title())
 
 # Map full words to abbreviations, as with the donations dataframe.
 
@@ -266,7 +254,16 @@ df = pd.merge(df, df_committee, how='left', on='id_committee', suffixes=['_donat
 ### Import the candidate data.
 ##############################
 
-# Next source: https://www.fec.gov/data/browse-data/?tab=bulk-data
+# All candidate data from: https://www.fec.gov/data/browse-data/?tab=bulk-data
+
+raw_candidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020_candidates/cn.txt', header=None, sep='|')
+
+# Rename the columns.
+
+raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'election', 'district', 'incumbent', 'status', 'id_committee', 'street', 'street2', 'city', 'state', 'zip']
+
+
+######################### NEXT STEP IDEAS
 
 # Count how many give outside their state.
 
