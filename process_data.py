@@ -20,12 +20,8 @@ pd.set_option('display.max_columns', 40)
 
 # Read the 2019-2020 individual contribution data.
 
-raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020/itcont.txt',
+raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020/itcont.txt',
                   header=None, sep='|', nrows=1000)
-
-# Add the header from FEC.gov to the raw file.
-
-# raw.columns = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/indiv_header_file.csv', nrows=1).columns.values
 
 # Fix the column names to something more legible.
 # See the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
@@ -249,7 +245,7 @@ df['type'] = df['type'].map(transaction_mapping)
 # Read in the committee data.
 
 raw_committee = pd.read_csv(
-    'C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020_committees/cm.txt', header=None, sep='|')
+    'C:/Users/Gabriel/Desktop/FEC/2019-2020_committees/cm.txt', header=None, sep='|')
 
 # Add a new header based on https://www.fec.gov/campaign-finance-data/committee-master-file-description/.
 
@@ -298,11 +294,11 @@ df = pd.merge(df, df_committee, how='left', on='id_committee', suffixes=['_donat
 
 # All candidate data from: https://www.fec.gov/data/browse-data/?tab=bulk-data
 
-raw_candidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC individual contributions/2019-2020_candidates/cn.txt', header=None, sep='|')
+raw_candidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_candidates/cn.txt', header=None, sep='|')
 
 # Rename the columns and create a separate df.
 
-raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'election', 'district', 'incumbent', 'status', 'id_committee', 'street', 'street2', 'city', 'state', 'zip']
+raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'race', 'district', 'incumbent', 'status', 'id_committee', 'street', 'street2', 'city', 'state', 'zip']
 
 df_candidate = raw_candidate[:]
 
@@ -310,18 +306,39 @@ df_candidate = raw_candidate[:]
 
 df_candidate = df_candidate.assign(candidate=clean_names(df_candidate.candidate))
 
-# Use the mapping for donations and committees (defined above) for the candidates.
+# Use mappings to expand a few of the variables into full words.
+# Find the corresponding info here: https://www.fec.gov/campaign-finance-data/candidate-master-file-description/
+
+race_mapping = {'H':'House', 'P':'President', 'S':'Senate'}
+incumbent_mapping = {'I':'Incumbent', 'C':'Challenger', 'O':'Open seat'}
+status_mapping = {'C':'Statutory candidate', 'F':'Statutory candidate for future election', 'N':'Not yet a statutory candidate', 'P':'Statutory candidate in prior cycle'}
 
 df_candidate['party_candidate'] = df_candidate['party_candidate'].map(party_mapping)
+df_candidate['race'] = df_candidate['race'].map(race_mapping)
+df_candidate['incumbent'] = df_candidate['incumbent'].map(incumbent_mapping)
+df_candidate['status'] = df_candidate['status'].map(status_mapping)
 
-elections_candidate = {'H':'House', 'P':'President', 'S':'Senate'}
-df_candidate['election'] = df_candidate['election'].map(elections_candidate)
-
-# Redefine districts and zip codes as strings.
+# Redefine districts, streets, cities, and zip codes as strings.
 
 df_candidate['district'] = df_candidate['district'].astype(str).str.replace('.0', '')
+df_candidate['election_year'] = df_candidate['election_year'].astype(str)
 df_candidate['zip'] = df_candidate['zip'].astype(str).str.replace('.0', '')
+df_candidate['street'] = df_candidate['street'].astype(str).str.title()
+df_candidate['street2'] = df_candidate['street2'].astype(str).str.title()
+df_candidate['city'] = df_candidate['city'].astype(str).str.title()
 
+# Only select variables of interest. Ignore things like mailing address and primary committee because we're focusing on donations.
+
+df_candidate_subset = df_candidate[['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'race', 'district', 'incumbent']]
+
+# Merge the candidate dataset into the full one.
+
+df = df.merge(df_candidate_subset, how='left', on='id_candidate')
+
+#####
+# Take care of NAs.
+# Change certain columns to factors.
+# Add in voting data.
 
 ######################### NEXT STEP IDEAS...
 
