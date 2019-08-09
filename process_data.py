@@ -350,4 +350,5 @@ df = df.merge(df_candidate_subset, how='left', on='id_candidate')
 
 # https: // www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
 # https://www.fec.gov/campaign-finance-data/committee-master-file-description/
-# https: // github.com/clintval/gender-predictor
+# MIT election data: https://electionlab.mit.edu/data
+# ZIP shapefiles: https://catalog.data.gov/dataset/tiger-line-shapefile-2015-2010-nation-u-s-2010-census-5-digit-zip-code-tabulation-area-zcta5-na
