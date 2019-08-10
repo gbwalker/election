@@ -178,9 +178,9 @@ def split_zips(zips):
 
     return result
 
-################
-# COMMITTEE DATA
-################
+############
+# COMMITTEES
+############
 ### Import and clean all of the committee data.
 
 # Read in the data from a saved location.
@@ -236,54 +236,46 @@ del df_committee['zip']
 df_committee = pd.concat([df_committee, committee_zips], axis=1)
 
 
-### Import the contribution data.
+##########################
+# INDIVIDUAL CONTRIBUTIONS
+##########################
+### Import and clean all of the data on individual contributions.
 
 # Read the 2019-2020 individual contribution data.
 
-raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020/itcont.txt',
+raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_individual-contributions/itcont.txt',
                   header=None, sep='|', nrows=1000)
 
-# Fix the column names to something more legible.
-# See the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
+# Fix the column names to something more legible based on the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
 
 raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip', 'employer', 
                'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
 
-#####################
-### Process the data.
-#####################
+# Copy only some variables of interest.
 
-# Copy the raw dataframe.
-
-df = raw[:]
+df_individuals = raw[['name', 'amount', 'city', 'state', 'zip', 'date', 'employer', 'occupation', 'id_committee', 'amendment', 'report', 'election', 'type', 'entity', 'memo_text']]
 
 # Improve look of employer, occupation, memo, and cities.
 
-df = df.assign(city=df.city.str.title(), employer=df.employer.str.title(), occupation=df.occupation.str.title(), memo_text=df.memo_text.str.title())
+df_individuals = df_individuals.assign(
+    city=df_individuals.city.str.title(), 
+    employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.title())
 
+# Clean up the formatting of the names with clean_names() defined above.
 
-# Assign a new name column with the cleaned names using the function above.
+df_individuals = df_individuals.assign(name=clean_names(df_individuals.name))
 
-df = df.assign(name=clean_names(df.name))
+# Split the zip codes into primary and secondary ones.
 
-# Remove other variables that don't add any predictive value, such as the image number, transaction ID, and FEC record (and possibly memo code).
-# Delete 22Y entries, which are refunded donations?
+individual_zips = split_zips(df_individuals.zip)
 
-del df['image'], df['id_transaction'], df['fec_record']
+del df_individuals['zip']
 
-# Join the two zip codes and name them appropriately.
+df_individuals = pd.concat([df_individuals, individual_zips], axis=1)
 
-zips_final = pd.merge(zip1, zip2, how='outer', left_index=True, right_index=True)
-zips_final.columns = ['zip', 'zip2']
+# Replace the date column with the function defined above.
 
-# Delete the original zip code column and merge in the split one.
-
-del df['zip']
-df = df.join(zips_final)
-
-# Replace the date column in the original dataframe.
-
-df = df.assign(date = df.date.apply(string_to_date))
+df_individuals = df_individuals.assign(date = df_individuals.date.apply(string_to_date))
 
 ### Make some variable values more legible with full words.
 # All according to the chart here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
@@ -292,35 +284,31 @@ amendments = {'N':'New', 'A':'Amendment', 'T':'Termination'}
 elections = {'P':'Primary', 'G':'General', 'O':'Other', 'C':'Convention', 'R':'Runoff', 'S':'Special', 'E':'Recount'}
 entities = {'CAN': 'Candidate', 'CCM':'Candidate Committee', 'COM':'Committee', 'IND':'Individual', 'ORG':'Organization', 'PAC':'Political Action Committee', 'PTY':'Party Organization'}
 
-df['amendment'] = df['amendment'].map(amendments)
-df['election'] = df['election'].map(elections)
-df['entity'] = df['entity'].map(entities)
+df_individuals['amendment'] = df_individuals['amendment'].map(amendments)
+df_individuals['election'] = df_individuals['election'].map(elections)
+df_individuals['entity'] = df_individuals['entity'].map(entities)
 
-
-# Get the report types.
+# Scrape the report and transaction types from the FEC website for mapping abbreviations to full words.
 
 report_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/report-type-code-descriptions/', 'report')
 
-# Get the transaction types.
-
 transaction_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/transaction-type-code-descriptions/', 'transaction')
 
-# Map all of the scraped values.
+# Map all of the full words.
 
-df['report'] = df['report'].map(report_mapping)
-df['type'] = df['type'].map(transaction_mapping)
+df_individuals['report'] = df_individuals['report'].map(report_mapping)
+df_individuals['type'] = df_individuals['type'].map(transaction_mapping)
 
 
-
-##############################
-### Import the candidate data.
-##############################
+##############
+### CANDIDATES
+##############
 
 # All candidate data from: https://www.fec.gov/data/browse-data/?tab=bulk-data
 
 raw_candidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_candidates/cn.txt', header=None, sep='|')
 
-# Rename the columns and create a separate df.
+# Rename the columns and create a separate copy of it.
 
 raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'race', 'district', 'incumbent', 'status', 'id_committee', 'street', 'street2', 'city', 'state', 'zip']
 
@@ -343,6 +331,7 @@ df_candidate['incumbent'] = df_candidate['incumbent'].map(incumbent_mapping)
 df_candidate['status'] = df_candidate['status'].map(status_mapping)
 
 # Redefine districts, streets, cities, and zip codes as strings.
+# Don't fix zip codes because many here are not the standard five-digit ones, but three-digit (or less) abbreviations.
 
 df_candidate['district'] = df_candidate['district'].astype(str).str.replace('.0', '')
 df_candidate['election_year'] = df_candidate['election_year'].astype(str)
@@ -351,13 +340,11 @@ df_candidate['street'] = df_candidate['street'].astype(str).str.title()
 df_candidate['street2'] = df_candidate['street2'].astype(str).str.title()
 df_candidate['city'] = df_candidate['city'].astype(str).str.title()
 
-# Only select variables of interest. Ignore things like mailing address and primary committee because we're focusing on donations.
+#########################
+# COMMITTEE CONTRIBUTIONS
+#########################
 
-df_candidate_subset = df_candidate[['id_candidate', 'candidate', 'party_candidate', 'election_year', 'election_state', 'race', 'district', 'incumbent']]
-
-# Merge the candidate dataset into the full one.
-
-df = df.merge(df_candidate_subset, how='left', on='id_candidate')
+# NEXT STEP: load in and clean data on committee contributions. Then will have 4 datasets to work with and pull together. Should turn them into TWO final ones: inflows and outflows. The candidate data should be mapped onto both.
 
 #####
 # Take care of NAs.
