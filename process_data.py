@@ -114,7 +114,13 @@ def string_to_date(s):
     # Convert the integer to a string.
 
     s = str(s)
-
+    
+    # Return a null if the date field is null.
+    
+    if s == 'nan':
+        
+        return None
+    
     # The year is always the last four digits.
 
     year = re.search(r'(\d\d\d\d$)', s)[0]
@@ -128,7 +134,7 @@ def string_to_date(s):
     # If there's only one digit for the month or day.
 
     if len(s) == 7:
-        if s[0] in ['2', '3'] or s[1] == '3' or s[2] == '0':
+        if s[0] in ['2', '3'] or s[1] == '3' or s[2] == '0' or int(s[:2]) > 12:
             month = s[0]
             day = s[1:3]
         else:
@@ -355,7 +361,7 @@ raw_expenditures.columns = ['id_committee', 'amendment', 'year', 'type', 'image'
 
 df_expenditures = raw_expenditures[['id_committee', 'name', 'entity', 'date', 'amount', 'purpose', 'category_description', 'city', 'state', 'zip', 'type', 'election', 'memo_text', 'image']]
 
-# Clean up the formatting of name, purpose and city.
+# Clean up the formatting of name, purpose, and city.
 
 df_expenditures = df_expenditures.assign(
     name=df_expenditures.name.str.title(),
@@ -400,8 +406,35 @@ raw_ctc = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-commi
 
 raw_ctc.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name', 'city', 'state', 'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
 
-# 
+# Save only variables of interest for display and merging with other datasets.
 
+df_ctc = raw_ctc[['id_committee', 'name', 'entity', 'date', 'amount', 'city', 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
+
+# Clean up the formatting of name, city, date, etc.
+
+df_ctc = df_ctc.assign(
+    name=df_ctc.name.str.title(),
+    city=df_ctc.city.str.title(),
+    date=df_ctc.date.astype('str').str.replace('\.0', ''),
+    zip=df_ctc.zip.astype('str'),
+    memo_text=df_ctc.memo_text.str.capitalize())
+
+# Split the zip code into primary and secondary.
+
+ctc_zips = split_zips(df_ctc.zip)
+
+del df_ctc['zip']
+
+df_ctc = pd.concat([df_ctc, ctc_zips], axis=1)
+
+# Turn abbreviations into full words for improved legibility.
+
+df_ctc['entity'] = df_ctc['entity'].map(entities)
+
+
+df_expenditures['entity'] = df_expenditures['entity'].map(entities)
+df_expenditures['election'] = df_expenditures['election'].map(elections)
+df_expenditures['type'] = df_expenditures['type'].map(expenditure_type_mapping)
 
 ######################################
 # COMMITTEE-TO-CANDIDATE CONTRIBUTIONS
