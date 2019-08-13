@@ -81,7 +81,7 @@ def map_pairs(url, type):
 
     # Check whether the type is a report or transaction for determining which lines to copy.
 
-    options = {'report':3, 'types':3, 'parties':3, 'transaction':2}
+    options = {'report':3, 'types':3, 'parties':3, 'expenditures':3, 'transaction':2}
     position = options.get(type)
 
     # Initialize an empty dictionary to store values and a counter.
@@ -243,23 +243,23 @@ df_committee = pd.concat([df_committee, committee_zips], axis=1)
 
 # Read the 2019-2020 individual contribution data.
 
-raw = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_individual-contributions/itcont.txt',
-                  header=None, sep='|', nrows=1000)
+raw_individuals = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_individual-contributions/itcont.txt',
+                  header=None, sep='|', nrows=10000)
 
 # Fix the column names to something more legible based on the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
 
-raw.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip', 'employer', 
+raw_individuals.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip', 'employer', 
                'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
 
 # Copy only some variables of interest.
 
-df_individuals = raw[['name', 'amount', 'city', 'state', 'zip', 'date', 'employer', 'occupation', 'id_committee', 'amendment', 'report', 'election', 'type', 'entity', 'memo_text']]
+df_individuals = raw_individuals[['name', 'amount', 'city', 'state', 'zip', 'date', 'employer', 'occupation', 'id_committee', 'amendment', 'report', 'election', 'type', 'entity', 'memo_text', 'image']]
 
-# Improve look of employer, occupation, memo, and cities.
+# Improve look of employer, occupation, memo, and cities. Add the full URL to the original document image.
 
 df_individuals = df_individuals.assign(
     city=df_individuals.city.str.title(), 
-    employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.title())
+    employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.capitalize())
 
 # Clean up the formatting of the names with clean_names() defined above.
 
@@ -340,14 +340,79 @@ df_candidate['street'] = df_candidate['street'].astype(str).str.title()
 df_candidate['street2'] = df_candidate['street2'].astype(str).str.title()
 df_candidate['city'] = df_candidate['city'].astype(str).str.title()
 
-#########################
-# COMMITTEE CONTRIBUTIONS
-#########################
+########################
+# COMMITTEE EXPENDITURES
+########################
+# Data on all expenditures by each committee.
 
-# NEXT STEP: load in and clean data on committee contributions. Then will have 4 datasets to work with and pull together. Should turn them into TWO final ones: inflows and outflows. The candidate data should be mapped onto both.
+# Load the data, downloaded from the FEC bulk data site (as above), and rename the variables.
+
+raw_expenditures = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-expenditures/oppexp.txt', header=None, sep='|')
+
+raw_expenditures.columns = ['id_committee', 'amendment', 'year', 'type', 'image', 'line', 'form', 'schedule', 'name', 'city', 'state', 'zip', 'date', 'amount', 'election', 'purpose', 'category', 'category_description', 'memo', 'memo_text', 'entity', 'record', 'file', 'transaction', 'transaction_backref', 'empty']
+
+# Save only variables of interest for display and merging with other datasets.
+
+df_expenditures = raw_expenditures[['id_committee', 'name', 'entity', 'date', 'amount', 'purpose', 'category_description', 'city', 'state', 'zip', 'type', 'election', 'memo_text', 'image']]
+
+# Clean up the formatting of name, purpose and city.
+
+df_expenditures = df_expenditures.assign(
+    name=df_expenditures.name.str.title(),
+    purpose=df_expenditures.purpose.str.capitalize(),
+    city=df_expenditures.city.str.title(),
+    memo_text=df_expenditures.memo_text.str.capitalize())
+)
+
+# Split the zip code into primary and secondary.
+
+expenditure_zips = split_zips(df_expenditures.zip)
+
+del df_expenditures['zip']
+
+df_expenditures = pd.concat([df_expenditures, committee_zips], axis=1)
+
+# Scrape the FEC site for report expenditure type mapping.
+
+expenditure_type_mapping = map_pairs('https://www.fec.gov/campaign-finance-data/report-type-code-descriptions/', 'expenditures')
+
+# Turn abbreviations into full words for improved legibility.
+
+df_expenditures['entity'] = df_expenditures['entity'].map(entities)
+df_expenditures['election'] = df_expenditures['election'].map(elections)
+df_expenditures['type'] = df_expenditures['type'].map(expenditure_type_mapping)
+
+# Convert the date strings to real datetime objects.
+
+expenditure_dates = df_expenditures.date.dropna().apply(datetime.strptime, args=['%M/%d/%Y']).apply(datetime.date)
+
+df_expenditures = df_expenditures.assign(date=expenditure_dates)
+
+
+#####################################
+# COMMITTEE-TO-COMMITTEE TRANSACTIONS
+#####################################
+# Data that tracks all committee-to-committee transactions.
+
+# Read in the downloaded file and assign column names: https://www.fec.gov/campaign-finance-data/any-transaction-one-committee-another-file-description/.
+
+raw_ctc = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-committee-transactions/itoth.txt', header=None, sep='|')
+
+raw_ctc.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name', 'city', 'state', 'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
+
+# 
+
+
+######################################
+# COMMITTEE-TO-CANDIDATE CONTRIBUTIONS
+######################################
+# Data that tracks all committee-to-candidate transactions.
+
+
 
 #####
-# Take care of NAs.
+# Take care of NAs and entries that seem unusual/wrong.
+# Take care of negative donations.
 # Change certain columns to factors.
 # Add in voting data.
 
@@ -363,3 +428,5 @@ df_candidate['city'] = df_candidate['city'].astype(str).str.title()
 # https://www.fec.gov/campaign-finance-data/committee-master-file-description/
 # MIT election data: https://electionlab.mit.edu/data
 # ZIP shapefiles: https://catalog.data.gov/dataset/tiger-line-shapefile-2015-2010-nation-u-s-2010-census-5-digit-zip-code-tabulation-area-zcta5-na
+
+# Use this URL to find original images AND committee pages. Just append the image number or committee ID: https://docquery.fec.gov/cgi-bin/fecimg/?
