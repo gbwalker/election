@@ -402,64 +402,100 @@ df_expenditures = df_expenditures.assign(date=expenditure_dates)
 
 # Read in the downloaded file and assign column names: https://www.fec.gov/campaign-finance-data/any-transaction-one-committee-another-file-description/.
 
-raw_ctc = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-committee-transactions/itoth.txt', header=None, sep='|')
+raw_cc = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-committee-transactions/itoth.txt', header=None, sep='|')
 
-raw_ctc.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name', 'city', 'state', 'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
+raw_cc.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name', 'city', 'state', 'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
 
 # Save only variables of interest for display and merging with other datasets.
 
-df_ctc = raw_ctc[['id_committee', 'name', 'entity', 'date', 'amount', 'city', 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
+df_cc = raw_cc[['id_committee', 'name', 'entity', 'date', 'amount', 'city', 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
 
 # Clean up the formatting of name, city, date, etc.
 
-df_ctc = df_ctc.assign(
-    name=df_ctc.name.str.title(),
-    city=df_ctc.city.str.title(),
-    date=df_ctc.date.astype('str').str.replace('\.0', ''),
-    zip=df_ctc.zip.astype('str'),
-    memo_text=df_ctc.memo_text.str.capitalize())
+df_cc = df_cc.assign(
+    name=df_cc.name.str.title(),
+    city=df_cc.city.str.title(),
+    date=df_cc.date.astype('str').str.replace('\.0', ''),
+    zip=df_cc.zip.astype('str'),
+    memo_text=df_cc.memo_text.str.capitalize())
 
 # Split the zip code into primary and secondary.
 
-ctc_zips = split_zips(df_ctc.zip)
+cc_zips = split_zips(df_cc.zip)
 
-del df_ctc['zip']
+del df_cc['zip']
 
-df_ctc = pd.concat([df_ctc, ctc_zips], axis=1)
+df_cc = pd.concat([df_cc, cc_zips], axis=1)
 
 # Turn abbreviations into full words for improved legibility.
 
-df_ctc['entity'] = df_ctc['entity'].map(entities)
+df_cc['entity'] = df_cc['entity'].map(entities)
+df_cc['election'] = df_cc['election'].map(elections)
+df_cc['report'] = df_cc['report'].map(report_mapping)
 
+# Replace the date with datetime objects.
 
-df_expenditures['entity'] = df_expenditures['entity'].map(entities)
-df_expenditures['election'] = df_expenditures['election'].map(elections)
-df_expenditures['type'] = df_expenditures['type'].map(expenditure_type_mapping)
+df_cc = df_cc.assign(date = df_cc.date.apply(string_to_date))
+
 
 ######################################
 # COMMITTEE-TO-CANDIDATE CONTRIBUTIONS
 ######################################
-# Data that tracks all committee-to-candidate transactions.
+# Data that tracks all committee-to-candidate transactions and independent expenditures.
+
+# Read in the downloaded file and assign column names: https://www.fec.gov/campaign-finance-data/any-transaction-one-committee-another-file-description/.
+
+raw_ccandidate = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-candidate-transactions/itpas2.txt', header=None, sep='|')
+
+raw_ccandidate.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name', 'city', 'state', 'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_candidate', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
+
+# Save only variables of interest for display and merging with other datasets.
+
+df_ccandidate = raw_ccandidate[['id_committee', 'id_candidate', 'name', 'entity', 'date', 'amount', 'city', 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
+
+# Clean up the formatting of name, city, date, etc.
+
+df_ccandidate = df_ccandidate.assign(
+    name=df_ccandidate.name.str.title(),
+    city=df_ccandidate.city.str.title(),
+    date=df_ccandidate.date.astype('str').str.replace('\.0', ''),
+    zip=df_ccandidate.zip.astype('str'),
+    memo_text=df_ccandidate.memo_text.str.capitalize())
+
+# Split the zip code into primary and secondary.
+
+ccandidate_zips = split_zips(df_ccandidate.zip)
+
+del df_ccandidate['zip']
+
+df_ccandidate = pd.concat([df_ccandidate, ccandidate_zips], axis=1)
+
+# Turn abbreviations into full words for improved legibility.
+
+df_ccandidate['entity'] = df_ccandidate['entity'].map(entities)
+df_ccandidate['election'] = df_ccandidate['election'].map(elections)
+df_ccandidate['report'] = df_ccandidate['report'].map(report_mapping)
+
+# Replace the date with datetime objects.
+
+df_ccandidate = df_ccandidate.assign(date = df_ccandidate.date.apply(string_to_date))
+
+
+###########################
+# DATA CLEANING AND MERGING
+###########################
+
+# Write a function that takes in a dataframe and returns one with the negative donations (and their positive correlates) removed.
 
 
 
-#####
-# Take care of NAs and entries that seem unusual/wrong.
-# Take care of negative donations.
-# Change certain columns to factors.
-# Add in voting data.
-
-######################### NEXT STEP IDEAS...
-
-# Count how many give outside their state.
-
-# Find the numerical range, average, etc. (plot?) of the donation amounts. Also distribution of locations.
-
-# Find candidate election results. Manipulate the date to determine how early/late donation is.
+######################### NEXT STEPS
+# Remove negative donations.
+# Join the 6 datasets into two (inflows/outflows).
+# Exploratory plots (donation amounts and distribution of locations).
 
 # https: // www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
 # https://www.fec.gov/campaign-finance-data/committee-master-file-description/
-# MIT election data: https://electionlab.mit.edu/data
 # ZIP shapefiles: https://catalog.data.gov/dataset/tiger-line-shapefile-2015-2010-nation-u-s-2010-census-5-digit-zip-code-tabulation-area-zcta5-na
 
-# Use this URL to find original images AND committee pages. Just append the image number or committee ID: https://docquery.fec.gov/cgi-bin/fecimg/?
+### Use this URL to find original images AND committee pages. Just append the image number or committee ID: https://docquery.fec.gov/cgi-bin/fecimg/?
