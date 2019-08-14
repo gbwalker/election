@@ -184,31 +184,43 @@ def split_zips(zips):
 
     return result
 
-### remove_cancelled()
-# This function takes in a dataframe and returns one without "cancelled" transactions (i.e., ones that have both negative and positive transaction amounts).
+### remove_invalid()
+# This function takes in a dataframe and returns one without "invalid" transactions (i.e., ones that are negative OR are positive and correspond to a negative one).
 # This works for the df_individuals, df_expenditures, df_cc, and df_ccandidate dataframes.
+# It assumes that there are not duplicate name entries for negative transactions.
 
-def remove_cancelled(df):
+def remove_invalid(df):
     
-    # Create a dictionary of only negative transactions.
+    # Create a dictionary of only negative transactions with names as keys.
+    # There must only be one negative transaction per name key.
     
     negatives = pd.Series(df[df.amount < 0].amount.values, index=df[df.amount < 0].name).to_dict()
+        
+    # Make an initial list of invalid transactions to remove (negatives).
     
-    # Add another field with just the positive transactions.
-    
-    #### START HERE WITH THE df_individuals DATAFRAME
+    delete_list = list(df[df.amount < 0].index)
 
-    # Find all entries that have a negative name and an amount that's a negative transaction.
+    # Find all entries that have a name in the negative list AND an amount that's the positive version of a negative transaction.
     
-    df[(df.name.isin(d['name'])) & (df.amount.isin(d['positive_amount']))]
-
-    # Also create a pattern joined with 'or' to search for in the full list.
+    for index, row in df.iterrows():
+        
+        # Match a name in the negative list.
+        
+        if row['name'] in negatives.keys():
+            
+            # Match an amount that corresponds to a negative.
+        
+            if negatives[row['name']] == -1 * row['amount']:
+                
+                # Add the transactions to the list of ones to delete.
+                
+                delete_list.append(index)
+            
+    # Remove the entries that appear in the delete list.
     
-    pattern = '|'.join(names)
+    result = df[~df.index.isin(delete_list)]
     
-    # Create a dataframe with all of the transactions associated with the negative transactions.
-    
-    return df[df.name.str.contains(pattern)]
+    return result
 
 
 ############
