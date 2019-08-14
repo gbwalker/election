@@ -190,9 +190,17 @@ def split_zips(zips):
 
 def remove_cancelled(df):
     
-    # Create a list of names with negative transactions.
+    # Create a dictionary of only negative transactions.
     
-    names = list(df[df.amount < 0].name)
+    negatives = pd.Series(df[df.amount < 0].amount.values, index=df[df.amount < 0].name).to_dict()
+    
+    # Add another field with just the positive transactions.
+    
+    #### START HERE WITH THE df_individuals DATAFRAME
+
+    # Find all entries that have a negative name and an amount that's a negative transaction.
+    
+    df[(df.name.isin(d['name'])) & (df.amount.isin(d['positive_amount']))]
 
     # Also create a pattern joined with 'or' to search for in the full list.
     
