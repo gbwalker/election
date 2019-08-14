@@ -184,6 +184,25 @@ def split_zips(zips):
 
     return result
 
+### remove_cancelled()
+# This function takes in a dataframe and returns one without "cancelled" transactions (i.e., ones that have both negative and positive transaction amounts).
+# This works for the df_individuals, df_expenditures, df_cc, and df_ccandidate dataframes.
+
+def remove_cancelled(df):
+    
+    # Create a list of names with negative transactions.
+    
+    names = list(df[df.amount < 0].name)
+
+    # Also create a pattern joined with 'or' to search for in the full list.
+    
+    pattern = '|'.join(names)
+    
+    # Create a dataframe with all of the transactions associated with the negative transactions.
+    
+    return df[df.name.str.contains(pattern)]
+
+
 ############
 # COMMITTEES
 ############
@@ -368,7 +387,6 @@ df_expenditures = df_expenditures.assign(
     purpose=df_expenditures.purpose.str.capitalize(),
     city=df_expenditures.city.str.title(),
     memo_text=df_expenditures.memo_text.str.capitalize())
-)
 
 # Split the zip code into primary and secondary.
 
@@ -485,7 +503,13 @@ df_ccandidate = df_ccandidate.assign(date = df_ccandidate.date.apply(string_to_d
 # DATA CLEANING AND MERGING
 ###########################
 
-# Write a function that takes in a dataframe and returns one with the negative donations (and their positive correlates) removed.
+# The six semi-finalized dataframes:
+# df_committee
+# df_individuals
+# df_expenditures
+# df_candidate
+# df_cc
+# df_ccandidate
 
 
 
