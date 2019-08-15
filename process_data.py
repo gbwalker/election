@@ -200,28 +200,27 @@ def remove_invalid(df):
     
     delete_list = list(df[df.amount < 0].index)
 
+    # Create a much shortened dataframe with just name matches.
+    
+    df_short = df[df.name.isin(negatives.keys())]
+
     # Find all entries that have a name in the negative list AND an amount that's the positive version of a negative transaction.
     
-    for index, row in df.iterrows():
-        
-        # Match a name in the negative list.
-        
-        if row['name'] in negatives.keys():
+    for index, row in df_short.iterrows():
             
-            # Match an amount that corresponds to a negative.
-        
-            if negatives[row['name']] == -1 * row['amount']:
-                
-                # Add the transactions to the list of ones to delete.
-                
-                delete_list.append(index)
+        # Match an amount that corresponds to a negative.
+    
+        if negatives[row['name']] == -1 * row['amount']:
             
+            # Add the transactions to the list of ones to delete.
+            
+            delete_list.append(index)
+        
     # Remove the entries that appear in the delete list.
     
     result = df[~df.index.isin(delete_list)]
     
     return result
-
 
 ############
 # COMMITTEES
@@ -531,10 +530,15 @@ df_ccandidate = df_ccandidate.assign(date = df_ccandidate.date.apply(string_to_d
 # df_cc
 # df_ccandidate
 
+### Remove invalid transactions that are either negative or positive AND correspond to a negative transaction. Use remove_invalid() as defined above.
+
+df_individuals = remove_invalid(df_individuals)
+df_expenditures = remove_invalid(df_expenditures)
+df_cc = remove_invalid(df_cc)
+df_ccandidate = remove_invalid(df_ccandidate)
 
 
 ######################### NEXT STEPS
-# Remove negative donations.
 # Join the 6 datasets into two (inflows/outflows).
 # Exploratory plots (donation amounts and distribution of locations).
 
