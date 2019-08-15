@@ -21,54 +21,64 @@ pd.set_option('display.max_columns', 40)
 ###########
 
 # clean_names()
-# Get first and last names and assign them to new columns. This function takes in a column of names and returns a clean one.
+# Get first, middle, and last names and assign them to new columns. This function takes in a column of names and returns an expanded version.
 
 def clean_names(names):
-
+    
     # Initialize an empty list for storing the complete names.
 
-    result = []
+    result = pd.DataFrame(columns=['name', 'first_last', 'first', 'middle', 'last'], index=names.index)
+    
+    # Split the names by comma.
 
-    # Split the names by spacing.
+    split_names = names.str.split(' ', expand=True)
+    
+    # Iterate through each row in the split names to identify first, middle, and last names.
 
-    names = names.str.split(' ', expand=True)
+    for index, row in split_names.iterrows():
+        
+        # Iterate over each split.
+        
+        for n in range(row.count()):
+            
+            # If the element has a comma, it should be the last name.
+            
+            if ',' in row[n]:
+        
+                # Save the identified last name and remove the comma after it.
+        
+                last = ' '.join(row[0:n+1])[0:-1]
+                
+                first = row[n+1]
+                
+                # If there is an additional name that does not contain a period (e.g., Mrs., Dr., etc.), then save it as the middle. This leaves out some middle initials, but should be good enought to identify most individuals.
+                
+                middle = ''
+                
+                if not pd.isnull(row[n+2]):
+                    
+                    if ('.' not in row[n+2]) & ('MR' not in row[n+2]):
+                    
+                        middle = row[n+2]
+                
+                result.iloc[index] = {
+                    'name': first.title() + ' ' + middle.title() + ' ' + last.title(), 
+                    'first_last': first.title() + ' ' + last.title(),
+                    'first': first.title(), 
+                    'middle': middle.title(), 
+                    'last': last.title()}
+                                
+                break
+    
+    # Clean up formatting a bit.
+    
+    result = result.assign(name=result.name.str.replace(',', '').str.replace(' Ii', ''),
+                           first_last=result.first_last.str.replace(',', '').str.replace(' Ii', ''),
+                           middle=result.middle.str.replace(',', ''),
+                           last=result['last'].str.replace(' Ii', ''))
+    
+    return result
 
-    # The last name always comes first.
-
-    last = names[0].str.replace(',', '').str.title()
-
-    # Go through every name to check for ones that aren't first or last.
-    # Note this uses a numeric iterator in case there are null values.
-
-    for n in range(len(names)):
-
-        # Make sure the person is not 'II,' or 'Jr.'
-
-        if ',' not in str(names[1][n]) and '.' not in str(names[1][n]):
-
-            # Use the name as the first name.
-
-            first = str(names[1][n]).title()
-
-            # If the second column was empty, use the first column as the first name.
-
-            if first == 'None':
-                first = last[n]
-                last[n] = ''
-
-        # Otherwise use the next split on the same corresponding row as long as it's not null.
-
-        elif str(names[2][n]) != 'None':
-
-            first = str(names[2][n]).title()
-
-        else:
-
-            first = str(names[1][n]).title()
-
-        result.append(first + ' ' + last[n])
-
-    return pd.DataFrame(result, columns=['name'])
 
 # map_pairs()
 # Scrape the FEC websites for more mapping pairs. This function takes in cleaned HTML tags and returns a dictionary of all the mapping pairs.
@@ -526,19 +536,26 @@ df_individuals = remove_invalid(df_individuals)
 df_expenditures = remove_invalid(df_expenditures)
 df_cc = remove_invalid(df_cc)
 
-# Merge in the committee names instead of using just the committee id.
+# Merge in the committee and individual names instead of using just ids.
 
-committee_names = df_committee[['id_committee', 'committee']]
+committees = df_committee[['id_committee', 'committee']]
+
+candidates = df_candidate[['id_candidate', 'candidate']]
 
 # Add in the recipient committee id to the committee-to-committee transactions dataset.
 # Also delete the extra id column.
 
-df_cc = pd.merge(df_cc, committee_names, how='left', left_on='name', right_on='committee')
+df_cc = pd.merge(df_cc, committees, how='left', left_on='name', right_on='committee')
 
 del df_cc['id_committee_y']
 
 df_cc = df_cc.rename(columns={'committee': 'recipient_committee',
                              'id_committee_x': 'id_committee'})
+
+# Add in the individual id in the same way if the recipient is a candidate.
+
+test = pd.merge(df_cc, candidates, how='left', left_on='name', right_on='candidate')
+
 
 # Save the six semi-finalized dataframes.
 # df_committee
