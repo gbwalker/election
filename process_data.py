@@ -27,7 +27,7 @@ def clean_names(names):
     
     # Initialize an empty list for storing the complete names.
 
-    result = pd.DataFrame(columns=['name', 'first_last', 'first', 'middle', 'last'], index=names.index)
+    result = pd.DataFrame(columns=['name_full', 'first_last', 'first', 'middle', 'last'], index=names.index)
     
     # Split the names by comma.
 
@@ -62,7 +62,7 @@ def clean_names(names):
                         middle = row[n+2]
                 
                 result.iloc[index] = {
-                    'name': first.title() + ' ' + middle.title() + ' ' + last.title(), 
+                    'name_full': first.title() + ' ' + middle.title() + ' ' + last.title(), 
                     'first_last': first.title() + ' ' + last.title(),
                     'first': first.title(), 
                     'middle': middle.title(), 
@@ -72,7 +72,7 @@ def clean_names(names):
     
     # Clean up formatting a bit.
     
-    result = result.assign(name=result.name.str.replace(',', '').str.replace(' Ii', ''),
+    result = result.assign(name=result.name_full.str.replace(',', '').str.replace(' Ii', ''),
                            first_last=result.first_last.str.replace(',', '').str.replace(' Ii', ''),
                            middle=result.middle.str.replace(',', ''),
                            last=result['last'].str.replace(' Ii', ''))
@@ -325,12 +325,16 @@ df_individuals = raw_individuals[['name', 'amount', 'city', 'state', 'zip', 'dat
 
 df_individuals = df_individuals.assign(
     city=df_individuals.city.str.title(),
-    employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.capitalize(),
-    name=df_individuals.name.str.title())
+    employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.capitalize())
 
-# Clean up the formatting of the names with clean_names() defined above.
+# Clean up and expand the formatting of the names with clean_names() defined above.
+# Then add it to the original dataframe and delete the name 
 
-# df_individuals = df_individuals.assign(name=clean_names(df_individuals.name))
+individual_names = clean_names(raw_individuals.name)
+
+df_individuals = pd.concat([df_individuals, individual_names], axis=1, )
+
+del df_individuals['name']
 
 # Split the zip codes into primary and secondary ones.
 
@@ -388,9 +392,13 @@ raw_candidate.columns = ['id_candidate', 'candidate', 'party_candidate', 'electi
 
 df_candidate = raw_candidate[:]
 
-# Improve the look of candidate names.
+# Expand and improve the look of candidate names using the function clean_names() defined above.
 
-df_candidate = df_candidate.assign(candidate=df_candidate.candidate.str.title())
+candidate_names = clean_names(raw_candidate.candidate)
+
+df_candidate = pd.concat([df_candidate, candidate_names], axis=1, )
+
+del df_candidate['name']
 
 # Use mappings to expand a few of the variables into full words.
 # Find the corresponding info here: https://www.fec.gov/campaign-finance-data/candidate-master-file-description/
@@ -523,6 +531,15 @@ cc_people = df_cc[df_cc.entity.isin(['Individual', 'Candidate'])]
 # Filter out one listing that's for a PAC, not for an individual (Donald J. Trump For President, Inc.).
 
 cc_people = cc_people[~cc_people.name.str.contains('Inc\.', na=False)]
+
+
+
+################################# START HERE.
+# Clean the names of the candidate and individual entitites.
+
+# cc_names = clean_names(raw_cc.name)
+
+# df_cc = pd.concat([df_cc, cc_names], axis=1, )
 
 
 
