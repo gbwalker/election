@@ -37,10 +37,20 @@ def clean_names(names):
 
     for index, row in split_names.iterrows():
         
+        # If the name is only one word long, use that.
+        
+        if row.count() == 1:
+            
+            result.loc[index] = {'name_full': row[0].title(),
+                                 'first_last': row[0].title(),
+                                 'first': row[0].title()}
+            
+            continue
+        
         # Iterate over each split.
         
         for n in range(row.count()):
-            
+                        
             # If the element has a comma, it should be the last name.
             
             if ',' in row[n]:
@@ -69,6 +79,28 @@ def clean_names(names):
                     'last': last.title()}
                                 
                 break
+            
+            # Catch edge cases that have no commas.
+            
+            if n + 1 == row.count():
+                
+                result.loc[index] = {
+                    'name_full': row[1].title() + ' ' + row[2].title() + ' ' + row[0].title(), 
+                    'first_last': row[1].title() + ' ' + row[0].title(),
+                    'first': row[1].title(), 
+                    'middle': row[2].title(), 
+                    'last': row[0].title()}
+                            
+            # Make a specific exception for Dr. Michel Anissa Powell, whose name is listed wrong.
+            
+            if row[0] == 'MICHEL':
+                
+                result.loc[index] = {
+                    'name_full': row[0].title() + ' ' + row[1].title() + ' ' + row[2].title(), 
+                    'first_last': row[0].title() + ' ' + row[2].title(),
+                    'first': row[0].title(), 
+                    'middle': row[1].title(), 
+                    'last': row[2].title()}
     
     # Clean up formatting a bit.
     
@@ -489,12 +521,12 @@ df_expenditures = df_expenditures.assign(date=expenditure_dates)
 raw_cc = pd.read_csv(
     'C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-committee-transactions/itoth.txt', header=None, sep='|')
 
-raw_cc.columns = ['id_committee_sender', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'recipient', 'city', 'state',
+raw_cc.columns = ['id_sender', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'recipient', 'city', 'state',
                   'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
 
 # Save only variables of interest for display and merging with other datasets.
 
-df_cc = raw_cc[['id_committee_sender', 'recipient', 'entity', 'date', 'amount', 'city',
+df_cc = raw_cc[['id_sender', 'recipient', 'entity', 'date', 'amount', 'city',
                 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
 
 # Clean up the formatting of name, city, date, etc.
@@ -557,10 +589,30 @@ committees = df_committee[['id_committee', 'committee']]
 
 candidates = df_candidate[['id_candidate', 'name_full']]
 
-# Add in the recipient committee id to the committee-to-committee transactions dataset.
-# Also delete the extra id column.
+# Add in the name of the sending committee.
 
-df_cc = pd.merge(df_cc, committees, how='left', left_on='name', right_on='committee')
+df_cc = pd.merge(df_cc, committees, how='left', left_on='id_sender', right_on='id_committee')
+
+del df_cc['id_committee']
+
+df_cc = df_cc.rename(columns={'committee': 'sender'})
+
+# Add in the id of the recipient committee.
+
+df_cc = pd.merge(df_cc, committees, how='left', left_on='recipient', right_on='committee')
+
+del df_cc['committee']
+
+df_cc = df_cc.rename(columns={'id_committee': 'id_recipient'})
+
+# Add in the candidate id for transactions to individuals.
+
+test = pd.merge(df_cc, candidates, how='left', left_on='name_full', right_on='name_full')
+
+####################################################
+
+
+
 
 del df_cc['id_committee_y']
 
