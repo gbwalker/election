@@ -25,6 +25,10 @@ pd.set_option('display.max_columns', 40)
 
 def clean_names(names):
     
+    # Remove leading or trailing spaces.
+    
+    names = names.str.strip()
+    
     # Initialize an empty list for storing the complete names.
 
     result = pd.DataFrame(columns=['name_full', 'first_last', 'first', 'middle', 'last'], index=names.index)
@@ -43,7 +47,9 @@ def clean_names(names):
             
             result.loc[index] = {'name_full': row[0].title(),
                                  'first_last': row[0].title(),
-                                 'first': row[0].title()}
+                                 'first': row[0].title(),
+                                 'middle': '',
+                                 'last': ''}
             
             continue
         
@@ -67,7 +73,7 @@ def clean_names(names):
                 
                 if not pd.isnull(row[n+2]):
                     
-                    if ('.' not in row[n+2]) & ('MR' not in row[n+2]):
+                    if ('.' not in row[n+2]) & ('MR' not in row[n+2]) & (row[n+2] not in ['OTHER', 'Other']):
                     
                         middle = row[n+2]
                 
@@ -77,9 +83,9 @@ def clean_names(names):
                     'first': first.title(), 
                     'middle': middle.title(), 
                     'last': last.title()}
-                                
+                                            
                 break
-            
+                        
             # Catch edge cases that have no commas.
             
             if n + 1 == row.count():
@@ -345,12 +351,12 @@ raw_individuals = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_individual
 
 # Fix the column names to something more legible based on the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
 
-raw_individuals.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name', 'city', 'state', 'zip', 'employer',
+raw_individuals.columns = ['id_committee', 'amendment', 'report', 'election', 'image', 'type', 'entity', 'name_full', 'city', 'state', 'zip', 'employer',
                            'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'id_report', 'memo_code', 'memo_text', 'fec_record']
 
 # Copy only some variables of interest.
 
-df_individuals = raw_individuals[['name', 'amount', 'city', 'state', 'zip', 'date', 'employer',
+df_individuals = raw_individuals[['name_full', 'amount', 'city', 'state', 'zip', 'date', 'employer',
                                   'occupation', 'id_committee', 'amendment', 'report', 'election', 'type', 'entity', 'memo_text', 'image']]
 
 # Improve look of employer, occupation, memo, and cities. Add the full URL to the original document image.
@@ -358,16 +364,6 @@ df_individuals = raw_individuals[['name', 'amount', 'city', 'state', 'zip', 'dat
 df_individuals = df_individuals.assign(
     city=df_individuals.city.str.title(),
     employer=df_individuals.employer.str.title(), occupation=df_individuals.occupation.str.title(), memo_text=df_individuals.memo_text.str.capitalize())
-
-# Clean up and expand the formatting of the names with clean_names() defined above.
-# Then add it to the original dataframe and delete the name column.
-# Note this will take a very long time to run for all the individual donations (1M+ names).
-
-individual_names = clean_names(raw_individuals.name)
-
-df_individuals = pd.concat([df_individuals, individual_names.name_full], axis=1)
-
-del df_individuals['name']
 
 # Split the zip codes into primary and secondary ones.
 
@@ -407,6 +403,24 @@ transaction_mapping = map_pairs(
 
 df_individuals['report'] = df_individuals['report'].map(report_mapping)
 df_individuals['type'] = df_individuals['type'].map(transaction_mapping)
+
+# Remove invalid transactions that are either negative or positive AND correspond to a negative transaction. Use remove_invalid() as defined above.
+
+df_individuals = remove_invalid(df_individuals)
+
+# Clean up and expand the formatting of the names with clean_names() defined above.
+# Then add it to the original dataframe and delete the name column.
+# Note this will take a VERY long time to run for all the individual donations (1M+ names).
+
+individual_names = clean_names(df_individuals.name_full)
+
+# Rename the original name column to 'name' to avoid confusing it with the cleaned names.
+
+df_individuals = df_individuals.rename(columns={'name_full': 'name'})
+
+df_individuals = pd.concat([df_individuals, individual_names], axis=1)
+
+del df_individuals['name']
 
 
 ##############
@@ -457,6 +471,7 @@ df_candidate['zip'] = df_candidate['zip'].astype(str).str.replace('.0', '')
 df_candidate['street'] = df_candidate['street'].astype(str).str.title()
 df_candidate['street2'] = df_candidate['street2'].astype(str).str.title()
 df_candidate['city'] = df_candidate['city'].astype(str).str.title()
+
 
 ########################
 # COMMITTEE EXPENDITURES
@@ -510,6 +525,10 @@ expenditure_dates = df_expenditures.date.dropna().apply(
 
 df_expenditures = df_expenditures.assign(date=expenditure_dates)
 
+# Remove invalid transactions that are either negative or positive AND correspond to a negative transaction. Use remove_invalid() as defined above.
+
+df_expenditures = remove_invalid(df_expenditures)
+
 
 #####################################
 # COMMITTEE-TO-COMMITTEE TRANSACTIONS
@@ -521,18 +540,17 @@ df_expenditures = df_expenditures.assign(date=expenditure_dates)
 raw_cc = pd.read_csv(
     'C:/Users/Gabriel/Desktop/FEC/2019-2020_committee-to-committee-transactions/itoth.txt', header=None, sep='|')
 
-raw_cc.columns = ['id_sender', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'recipient', 'city', 'state',
+raw_cc.columns = ['id_recipient', 'amendment', 'report', 'election', 'image', 'transaction', 'entity', 'name_full', 'city', 'state',
                   'zip', 'employer', 'occupation', 'date', 'amount', 'id_other', 'id_transaction', 'file', 'memo', 'memo_text', 'fec_record']
 
 # Save only variables of interest for display and merging with other datasets.
 
-df_cc = raw_cc[['id_sender', 'recipient', 'entity', 'date', 'amount', 'city',
+df_cc = raw_cc[['id_recipient', 'name_full', 'entity', 'date', 'amount', 'city',
                 'state', 'zip', 'employer', 'election', 'report', 'memo_text', 'image']]
 
 # Clean up the formatting of name, city, date, etc.
 
 df_cc = df_cc.assign(
-    recipient=df_cc.recipient.str.title(),
     city=df_cc.city.str.title(),
     date=df_cc.date.astype('str').str.replace('\.0', ''),
     zip=df_cc.zip.astype('str'),
@@ -557,18 +575,28 @@ df_cc['report'] = df_cc['report'].map(report_mapping)
 
 df_cc = df_cc.assign(date=df_cc.date.apply(string_to_date))
 
-# Turn candidate and individual names in the 'name' (recipient) column into the format "First, Last."
+# Remove invalid transactions that are either negative or positive AND correspond to a negative transaction. Use remove_invalid() as defined above.
+
+df_cc = remove_invalid(df_cc)
+
+# Rename the 'name_full' column to 'recipient' (since only the former works in remove_invalid()).
+
+df_cc = df_cc.rename(columns={'name_full': 'sender'})
+
+df_cc = df_cc.assign(sender=df_cc.sender.str.title())
+
+# Turn candidate and individual names in the 'sender' column into a usable format.
 
 cc_people = df_cc[df_cc.entity.isin(['Individual', 'Candidate'])]
 
 # Filter out one listing that's for a PAC, not for an individual (Donald J. Trump For President, Inc.).
 
-cc_people = cc_people[~cc_people.recipient.str.contains('Inc\.', na=False)]
+cc_people = cc_people[~cc_people.sender.str.contains('Inc\.', na=False)]
 
 # Clean the names of the candidate and individual entities in the candidate transaction list.
 # Note that this takes a few minutes to run.
 
-cc_names = clean_names(cc_people.recipient)
+cc_names = clean_names(cc_people.sender)
 
 df_cc = pd.merge(df_cc, cc_names, how='left', left_index=True, right_index=True)
 
@@ -577,62 +605,55 @@ df_cc = pd.merge(df_cc, cc_names, how='left', left_index=True, right_index=True)
 # DATA CLEANING AND MERGING
 ###########################
 
-# Remove invalid transactions that are either negative or positive AND correspond to a negative transaction. Use remove_invalid() as defined above.
-
-df_individuals = remove_invalid(df_individuals)
-df_expenditures = remove_invalid(df_expenditures)
-df_cc = remove_invalid(df_cc)
-
 # Merge in the committee and individual names instead of using just ids.
 
 committees = df_committee[['id_committee', 'committee']]
 
-candidates = df_candidate[['id_candidate', 'name_full']]
+candidates = df_candidate[['id_candidate', 'first_last']]
 
 # Add in the name of the sending committee.
 
-df_cc = pd.merge(df_cc, committees, how='left', left_on='id_sender', right_on='id_committee')
-
-del df_cc['id_committee']
-
-df_cc = df_cc.rename(columns={'committee': 'sender'})
-
-# Add in the id of the recipient committee.
-
-df_cc = pd.merge(df_cc, committees, how='left', left_on='recipient', right_on='committee')
+df_cc = pd.merge(df_cc, committees, how='left', left_on='sender', right_on='committee')
 
 del df_cc['committee']
 
-df_cc = df_cc.rename(columns={'id_committee': 'id_recipient'})
+df_cc = df_cc.rename(columns={'id_committee': 'id_sender'})
 
-# Add in the candidate id for transactions to individuals.
+# Add in the name of the recipient committee.
 
-test = pd.merge(df_cc, candidates, how='left', left_on='name_full', right_on='name_full')
+df_cc = pd.merge(df_cc, committees, how='left', left_on='id_recipient', right_on='id_committee')
 
-####################################################
+del df_cc['id_committee']
 
+df_cc = df_cc.rename(columns={'committee': 'recipient'})
 
+# Add in the candidate id for transactions from individuals.
 
+df_cc = pd.merge(df_cc, candidates, how='left', left_on='first_last', right_on='first_last')
 
-del df_cc['id_committee_y']
+# Add in the recipient committee name to the individual donations.
 
-df_cc = df_cc.rename(columns={'committee': 'recipient_committee',
-                             'id_committee_x': 'id_committee'})
+df_individuals = pd.merge(df_individuals, committees, how='left', on='id_committee')
 
-# Add in the individual id in the same way if the recipient is a candidate.
+df_individuals = df_individuals.rename(columns={'committee': 'recipient'})
 
-test = pd.merge(df_cc, candidates, how='left', left_on='name_full', right_on='name_full')
+# Add in the committee name to the expenditures.
 
+df_expenditures = pd.merge(df_expenditures, committees, how='left', on='id_committee')
 
-# Save the six semi-finalized dataframes.
-# df_committee
-# df_individuals
-# df_expenditures
-# df_candidate
-# df_cc
+# Add the corresponding committee name to the candidate list.
+
+df_candidate = pd.merge(df_candidate, committees, how='left', on='id_committee')
+
+# Save the five finalized dataframes.
+
+df_committee.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_committee')
+df_individuals.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_individuals')
+df_expenditures.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_expenditures')
+df_candidate.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
+df_cc.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 
 # NEXT STEPS
-# Join the 6 datasets into two (inflows/outflows).
 # Exploratory plots (donation amounts and distribution of locations).
 
 # https: // www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
