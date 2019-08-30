@@ -299,7 +299,9 @@ df_committee = raw_committee[['id_committee', 'committee', 'designation', 'type'
 # Improve the capitalizations of a few of the variables.
 
 df_committee = df_committee.assign(
-    committee=df_committee.committee.str.title(), connection=df_committee.connection.str.title(), treasurer=df_committee.treasurer.str.title(),
+    committee=df_committee.committee.str.title().str.replace('\'S', '\'s'), 
+    connection=df_committee.connection.str.title(), 
+    treasurer=df_committee.treasurer.str.title(),
     street1=df_committee.street1.str.title(),
     street2=df_committee.street2.str.title(),
     city=df_committee.city.str.title())
