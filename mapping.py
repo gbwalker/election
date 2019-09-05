@@ -67,7 +67,28 @@ zips.columns = ['zip', 'geometry']
 ###########
 # Scrape zip code prefixes from Wikipedia to match zip shapefiles with states.
 
+url = 'https://en.wikipedia.org/wiki/List_of_ZIP_Code_prefixes'
 
+raw_wiki = requests.get(url).text
+soup_wiki = BeautifulSoup(raw_wiki)
+clean_soup = soup_wiki.find_all('td')
+
+# Save all the tags into a dataframe.
+
+zips_wiki = pd.DataFrame(clean_soup, columns=['tag'])
+
+# Create a new dataframe for storing zip prefixes and locations.
+
+zip_prefixes = pd.DataFrame(index=range(len(zips_wiki)), columns=['prefix', 'location'])
+
+# Start here. Identify the patterns of interest from the soup.
+
+for row, item in enumerate(zips_wiki.values):
+
+    print(row, item)
+
+prefix = str(tag).str.match('\d\d\d')
+    
 
 
 
