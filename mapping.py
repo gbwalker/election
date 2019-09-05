@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
 import requests
+import re
 from bs4 import BeautifulSoup
 import json
 # import earthpy as et
@@ -73,23 +74,55 @@ raw_wiki = requests.get(url).text
 soup_wiki = BeautifulSoup(raw_wiki)
 clean_soup = soup_wiki.find_all('td')
 
-# Save all the tags into a dataframe.
+# Save all the tags into a dataframe and turn them into readable strings.
 
 zips_wiki = pd.DataFrame(clean_soup, columns=['tag'])
 
+zips_wiki = zips_wiki.assign(tag=zips_wiki.tag.astype('str'))
+
 # Create a new dataframe for storing zip prefixes and locations.
 
-zip_prefixes = pd.DataFrame(index=range(len(zips_wiki)), columns=['prefix', 'location'])
+zip_prefixes = pd.DataFrame(index=range(len(zips_wiki)), columns=['prefix', 'state', 'locale'])
 
-# Start here. Identify the patterns of interest from the soup.
+# Iterate through all of the captured tags and grab the prefix (three consecutive numbers) and location.
 
-for row, item in enumerate(zips_wiki.values):
+for n in range(len(zips_wiki.values)):
 
-    print(row, item)
+    # Capture the prefix first if there is a valid set of three numbers.
 
-prefix = str(tag).str.match('\d\d\d')
+    if type(re.search(r'(>\d\d\d)', zips_wiki.tag[n])) != type(None):
+
+        zip_prefixes.prefix[n] = re.search(r'(>\d\d\d)', zips_wiki.tag[n])[0].replace('>', '')
     
+    # Capture the state associated with each zip prefix only if there is a valid state.
+    
+    if type(re.search(r'(title="\w+[\s-]?(\w+)?[\s-]?\w+?)', zips_wiki.tag[n])) != type(None):
+        
+        zip_prefixes.state[n] = re.search(r'(title="\w+[\s-]?(\w+)?[\s]?(\w+)?[\s]?(\w+)?)', zips_wiki.tag[n])[0].replace('title="', '').strip()
 
+    # Capture a specific locale if the state field is valid.
+    
+    if type(zip_prefixes.state[n]) != type(np.NaN):
+        
+        pattern = r'\w+(\s)?(\w+)?(\s)?(\w+)?, ' + zip_prefixes.state[n]
+        
+        delete_pattern = ', ' + zip_prefixes.state[n]
+        
+        # Make sure that there is a valid locale.
+        
+        if type(re.search(r'(/a.+\n)', zips_wiki.tag[n])) != type(None):
+            
+            # Make an initial slice of the characters to remove the first link.
+        
+            initial_slice = re.search(r'(/a.+\n)', zips_wiki.tag[n])[0]
+        
+            # Make sure there is a valid locale.
+        
+            if type(re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?)', initial_slice)) != type(None):
+        
+                zip_prefixes.locale[n] = re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?)', initial_slice)[0].replace('title="', '')
+
+#### NEXT STEP: ADD A CATCH FOR A SLASH / AND AMPERSAND & between spaces above.
 
 
 #############
