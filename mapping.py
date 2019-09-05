@@ -3,13 +3,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
+import requests
+from bs4 import BeautifulSoup
 import json
 # import earthpy as et
 from bokeh.io import output_notebook, show, output_file
 from bokeh.plotting import figure
 from bokeh.models import GeoJSONDataSource, LinearColorMapper, ColorBar
 from bokeh.palettes import brewer
-
 
 pd.set_option('expand_frame_repr', False)
 pd.set_option('display.max_columns', 40)
@@ -43,10 +44,14 @@ sf_states.columns = sf_states.columns.str.lower()
 
 sf_states = sf_states[['name', 'geometry']]
 
+# Remove extra states that are not the contiguous 50 or Alaska/Hawaii.
+
+sf_states = sf_states[~sf_states.name.isin(['United States Virgin Islands', 'Commonwealth of the Northern Mariana Islands', 'Guam', 'American Samoa', 'Puerto Rico'])]
+
 # See the full extent of the polygons: sf.total_bounds
 # See the CRS (coordinate reference system): sf.crs
 # See which polygons are noncontiguous: sf.geom_type
-# Plot some of the zips: sf.sample(200).plot()
+# Plot some of the zips: zips.sample(200).plot()
 
 # Select only the zip codes and their polygons.
 
@@ -56,6 +61,15 @@ zips.columns = ['zip', 'geometry']
 
 # Plot just the zip codes in the committee list.
 # zips[zips.zip.isin(df_committee.zip.values)].plot()
+
+###########
+# ZIP CODES
+###########
+# Scrape zip code prefixes from Wikipedia to match zip shapefiles with states.
+
+
+
+
 
 #############
 # INDIVIDUALS
