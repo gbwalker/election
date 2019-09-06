@@ -8,10 +8,8 @@ import re
 from bs4 import BeautifulSoup
 import json
 # import earthpy as et
-from bokeh.io import output_notebook, show, output_file
-from bokeh.plotting import figure
-from bokeh.models import GeoJSONDataSource, LinearColorMapper, ColorBar
-from bokeh.palettes import brewer
+from bokeh.plotting import figure, show, output_file
+from bokeh.tile_providers import get_provider, Vendors
 
 pd.set_option('expand_frame_repr', False)
 pd.set_option('display.max_columns', 40)
@@ -137,10 +135,24 @@ zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
 
 zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
+##########
+# PLOTTING
+##########
 
-#############
-# INDIVIDUALS
-#############
+pa_zips = zips[zips.state == 'Pennsylvania']
+
+# Test plot the zip code areas as GeoJSONs, without any associated data.
+
+json_zips = json.loads(pa_zips.to_json())
+
+json_data = json.dumps(json_zips)
+
+tile_provider = get_provider(Vendors.CARTODBPOSITRON)
+
+
+#######
+# NOTES
+#######
 
 # Turn dates to strings.
 
@@ -155,10 +167,6 @@ merged_individuals = zips.merge(df_individuals, on='zip')
 json_individuals = json.loads(merged_individuals.to_json())
 
 json_data = json.dumps(json_individuals)
-
-##########
-# PLOTTING
-##########
 
 # Input GeoJSON source that contains features for plotting.
 
@@ -186,7 +194,6 @@ p.patches('xs','ys',
 # Show the plot.
 
 show(p)
-
 
 # Make sure the polygons are plottable.
 # test = test.assign(geometry=gpd.GeoSeries(test.geometry))
