@@ -60,6 +60,14 @@ zips = sf_zips[['geoid10', 'geometry']]
 
 zips.columns = ['zip', 'geometry']
 
+zips = zips.assign(prefix=None)
+
+# Add in a column of the prefixes (first three digits). Note that .apply() won't work because re.search() returns a list.
+
+for n in range(len(zips.zip)):
+    
+    zips.prefix[n] = re.search(r'(\d\d\d)', zips.zip[n])[0]
+
 # Plot just the zip codes in the committee list.
 # zips[zips.zip.isin(df_committee.zip.values)].plot()
 
@@ -82,7 +90,7 @@ zips_wiki = zips_wiki.assign(tag=zips_wiki.tag.astype('str'))
 
 # Create a new dataframe for storing zip prefixes and locations.
 
-zip_prefixes = pd.DataFrame(index=range(len(zips_wiki)), columns=['prefix', 'state', 'locale'])
+zip_prefixes = pd.DataFrame(index=range(len(zips_wiki)), columns=['prefix', 'state', 'city'])
 
 # Iterate through all of the captured tags and grab the prefix (three consecutive numbers) and location.
 
@@ -100,7 +108,7 @@ for n in range(len(zips_wiki.values)):
         
         zip_prefixes.state[n] = re.search(r'(title="\w+[\s-]?(\w+)?[\s]?(\w+)?[\s]?(\w+)?)', zips_wiki.tag[n])[0].replace('title="', '').strip()
 
-    # Capture a specific locale if the state field is valid.
+    # Capture a specific city if the state field is valid.
     
     if type(zip_prefixes.state[n]) != type(np.NaN):
         
@@ -108,7 +116,7 @@ for n in range(len(zips_wiki.values)):
         
         delete_pattern = ', ' + zip_prefixes.state[n]
         
-        # Make sure that there is a valid locale.
+        # Make sure that there is a valid city.
         
         if type(re.search(r'(/a.+\n)', zips_wiki.tag[n])) != type(None):
             
@@ -116,13 +124,18 @@ for n in range(len(zips_wiki.values)):
         
             initial_slice = re.search(r'(/a.+\n)', zips_wiki.tag[n])[0]
         
-            # Make sure there is a valid locale.
+            # Make sure there is a valid city.
         
-            if type(re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?)', initial_slice)) != type(None):
+            if type(re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?\s?(\w+)?)', initial_slice)) != type(None):
         
-                zip_prefixes.locale[n] = re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?)', initial_slice)[0].replace('title="', '')
+                zip_prefixes.city[n] = re.search(r'(title="\w+\s?(\w+)?\s?(\w+)?\s?(\w+)?)', initial_slice)[0].replace('title="', '')
 
-#### NEXT STEP: ADD A CATCH FOR A SLASH / AND AMPERSAND & between spaces above.
+# Merge in the state and city information based on the zip code prefix.
+# First convert the prefixes to strings so they match in both dataframes.
+
+zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
+
+zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
 
 #############
