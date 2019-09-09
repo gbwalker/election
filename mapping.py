@@ -8,6 +8,7 @@ import re
 from bs4 import BeautifulSoup
 import json
 # import earthpy as et
+import folium
 from bokeh.plotting import figure, show, output_file
 from bokeh.tile_providers import get_provider, Vendors
 
@@ -135,19 +136,43 @@ zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
 
 zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
-##########
-# PLOTTING
-##########
+######################
+# PLOTTING WITH FOLIUM
+######################
 
 pa_zips = zips[zips.state == 'Pennsylvania']
 
-# Test plot the zip code areas as GeoJSONs, without any associated data.
+# Test plot the PA zip code areas as GeoJSONs, without any associated data.
 
 json_zips = json.loads(pa_zips.to_json())
 
 json_data = json.dumps(json_zips)
 
-tile_provider = get_provider(Vendors.CARTODBPOSITRON)
+m = folium.Map(location=[45.5236, -122.6750],
+               tiles='OpenStreetMap',
+               zoom_start=10)
+
+
+url = 'https://raw.githubusercontent.com/python-visualization/folium/master/examples/data'
+state_geo = f'{url}/us-states.json'
+state_unemployment = f'{url}/US_Unemployment_Oct2012.csv'
+state_data = pd.read_csv(state_unemployment)
+
+m = folium.Map(location=[48, -102], zoom_start=3)
+
+folium.Choropleth(
+    geo_data=state_geo,
+    name='choropleth',
+    data=state_data,
+    columns=['State', 'Unemployment'],
+    key_on='feature.id',
+    fill_color='YlGn',
+    fill_opacity=0.7,
+    line_opacity=0.2,
+    legend_name='Unemployment Rate (%)'
+).add_to(m)
+
+folium.LayerControl().add_to(m)
 
 
 #######
