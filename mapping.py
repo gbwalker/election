@@ -9,8 +9,8 @@ from bs4 import BeautifulSoup
 import json
 # import earthpy as et
 import folium
-from bokeh.plotting import figure, show, output_file
-from bokeh.tile_providers import get_provider, Vendors
+# from bokeh.plotting import figure, show, output_file
+# from bokeh.tile_providers import get_provider, Vendors
 
 pd.set_option('expand_frame_repr', False)
 pd.set_option('display.max_columns', 40)
@@ -140,25 +140,70 @@ zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 # PLOTTING WITH FOLIUM
 ######################
 
+# Get donations and zip codes just for Pennsylvania.
+
 pa_zips = zips[zips.state == 'Pennsylvania']
+
+pa_zips = pa_zips[['zip', 'geometry']]
+
+df_pa = df_individuals[df_individuals['state'] == 'PA'][['amount', 'zip']]
+
+# Find total donation amounts by zip code in order to plot a choropleth.
+
+df_pa = df_pa.groupby('zip').sum()
+
+df_pa.reset_index(level=0, inplace=True)
+
+# Add donation amounts of zero to each zip code where no donation history exists in a new dataframe.
+
+zero_zips = pa_zips.zip[~pa_zips.zip.isin(df_pa.zip)]
+
+df_zeros = pd.DataFrame(data=zero_zips, columns=['zip'])
+
+df_zeros = df_zeros.assign(amount=0)
+
+# Combine the zeros with the original donation data.
+
+df_pa = pd.concat([df_pa, df_zeros])
+
+# The donation data has zip codes 15275 and 19421 and the shapefile zips do not, so those records must be deleted.
+
+df_pa = df_pa[~df_pa.zip.isin(['15275', '19421'])]
 
 # Test plot the PA zip code areas as GeoJSONs, without any associated data.
 
-json_zips = json.loads(pa_zips.to_json())
+json_zips = pa_zips.to_json()
 
-json_data = json.dumps(json_zips)
+test = pa_zips.__geo_interface__
 
-m = folium.Map(location=[45.5236, -122.6750],
+# json_data = json.dumps(json_zips)
+
+m = folium.Map(location=[48, -102],
                tiles='OpenStreetMap',
-               zoom_start=10)
+               zoom_start=3)
 
+folium.Choropleth(
+    geo_data=pa_zips,
+    name='choropleth',
+    data=df_pa,
+    columns=['zip', 'amount'],
+    key_on='geometry',
+    fill_color='YlGn',
+    fill_opacity=0.7,
+    line_opacity=0.2,
+    legend_name='Donation amount ($)'
+    ).add_to(m)
+
+folium.LayerControl().add_to(m)
+
+m
+
+### Template below.
 
 url = 'https://raw.githubusercontent.com/python-visualization/folium/master/examples/data'
 state_geo = f'{url}/us-states.json'
 state_unemployment = f'{url}/US_Unemployment_Oct2012.csv'
 state_data = pd.read_csv(state_unemployment)
-
-m = folium.Map(location=[48, -102], zoom_start=3)
 
 folium.Choropleth(
     geo_data=state_geo,
@@ -171,8 +216,6 @@ folium.Choropleth(
     line_opacity=0.2,
     legend_name='Unemployment Rate (%)'
 ).add_to(m)
-
-folium.LayerControl().add_to(m)
 
 
 #######
