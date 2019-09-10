@@ -9,6 +9,8 @@ from bs4 import BeautifulSoup
 import json
 # import earthpy as et
 import folium
+import os
+import webbrowser
 # from bokeh.plotting import figure, show, output_file
 # from bokeh.tile_providers import get_provider, Vendors
 
@@ -166,29 +168,36 @@ df_zeros = df_zeros.assign(amount=0)
 
 df_pa = pd.concat([df_pa, df_zeros])
 
-# The donation data has zip codes 15275 and 19421 and the shapefile zips do not, so those records must be deleted.
+# Just get a few zip codes to test.
+
+df_pa_tiny = df_pa.sample(100)
+
+# The donation data has zip codes 15275 and 19421 but the shapefiles do not, so those records must be deleted.
 
 df_pa = df_pa[~df_pa.zip.isin(['15275', '19421'])]
 
 # Test plot the PA zip code areas as GeoJSONs, without any associated data.
+# See the structure of the GeoJSON with: json_zips.get('features')[0]
 
-json_zips = pa_zips.to_json()
+json_zips = pa_zips.__geo_interface__
 
-test = pa_zips.__geo_interface__
+json_tiny = pa_zips[pa_zips.zip.isin(df_pa_tiny.zip)].__geo_interface__
 
-# json_data = json.dumps(json_zips)
+# Create the map.
 
 m = folium.Map(location=[48, -102],
-               tiles='OpenStreetMap',
+               tiles='Mapbox Bright',
                zoom_start=3)
 
+# Add a choropleth layer.
+
 folium.Choropleth(
-    geo_data=pa_zips,
-    name='choropleth',
+    geo_data=json_zips,
+    name='Donations',
     data=df_pa,
     columns=['zip', 'amount'],
-    key_on='geometry',
-    fill_color='YlGn',
+    key_on='feature.properties.zip',
+    fill_color='BuPu',
     fill_opacity=0.7,
     line_opacity=0.2,
     legend_name='Donation amount ($)'
@@ -196,7 +205,13 @@ folium.Choropleth(
 
 folium.LayerControl().add_to(m)
 
-m
+m.save('C:/Users/Gabriel/Desktop/map.html')
+
+webbrowser.open('C:/Users/Gabriel/Desktop/map.html')
+
+# Test formatting for a GeoJSON dictionary.
+
+test = {"type":"FeatureCollection","features":[{"type":"Feature","id":"AL","properties":{"name":"Alabama"},"geometry":{"type":"Polygon","coordinates":[[[-87.359296, 35.00118],[-85.606675,34.984749],[-85.431413,34.124869]]]}}]}
 
 ### Template below.
 
