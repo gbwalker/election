@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 import requests
 from bs4 import BeautifulSoup
+from sklearn.feature_extraction.text import CountVectorizer
 
 # Make dataframes appear as full tables, not wrapped.
 
@@ -29,6 +30,10 @@ def clean_names(names):
     
     names = names.str.strip()
     
+    # Fix names with a comma and no space after it or ampersand and no spaces.
+    
+    names = names.str.replace(',', ', ').str.replace('&', ' & ').str.replace('  ', ' ')
+    
     # Initialize an empty list for storing the complete names.
 
     result = pd.DataFrame(columns=['name_full', 'first_last', 'first', 'middle', 'last'], index=names.index)
@@ -40,7 +45,7 @@ def clean_names(names):
     # Iterate through each row in the split names to identify first, middle, and last names.
 
     for index, row in split_names.iterrows():
-        
+                            
         # If the name is only one word long, use that.
         
         if row.count() == 1:
@@ -53,12 +58,39 @@ def clean_names(names):
             
             continue
         
+        # If the name has an ampersand in it and no comma, it's likely a law firm or business.
+        # If it has LLC or LP in the name, it's also a business.
+        
+        name_full = row.str.cat(sep=' ').title()
+        
+        if (('&' in name_full) & (not ',' in name_full)) | (' LLC' in name_full) | (' LP' in name_full):
+            
+            result.loc[index] = {'name_full': name_full,
+                        'first_last': name_full,
+                        'first': '',
+                        'middle': '',
+                        'last': ''}
+            
+            continue
+        
+        # If the name has a comma AND an ampersand, it's most likely a couple.
+        
+        if ('&' in name_full) & (',' in name_full):
+            
+            result.loc[index] = {'name_full': row[1:].str.cat(sep=' ').title() + ' ' + row[0].title(),
+                        'first_last': row[1:].str.cat(sep=' ').title() + ' ' + row[0].title(),
+                        'first': row[1:].str.cat(sep=' ').title(),
+                        'middle': '',
+                        'last': row[0].title()}
+            
+            continue
+        
         # Iterate over each split.
         
         for n in range(row.count()):
-                        
+                                                
             # If the element has a comma, it should be the last name.
-            
+                        
             if ',' in row[n]:
         
                 # Save the identified last name and remove the comma after it.
@@ -71,7 +103,7 @@ def clean_names(names):
                 
                 middle = ''
                 
-                if not pd.isnull(row[n+2]):
+                if not n + 2 >= row.count():
                     
                     if ('.' not in row[n+2]) & ('MR' not in row[n+2]) & (row[n+2] not in ['OTHER', 'Other']):
                     
@@ -91,10 +123,10 @@ def clean_names(names):
             if n + 1 == row.count():
                 
                 result.loc[index] = {
-                    'name_full': row[1].title() + ' ' + row[2].title() + ' ' + row[0].title(), 
+                    'name_full': row.str.cat(sep=' ').title(), 
                     'first_last': row[1].title() + ' ' + row[0].title(),
                     'first': row[1].title(), 
-                    'middle': row[2].title(), 
+                    'middle': '', 
                     'last': row[0].title()}
                             
             # Make a specific exception for Dr. Michel Anissa Powell, whose name is listed wrong.
@@ -102,18 +134,20 @@ def clean_names(names):
             if row[0] == 'MICHEL':
                 
                 result.loc[index] = {
-                    'name_full': row[0].title() + ' ' + row[1].title() + ' ' + row[2].title(), 
+                    'name_full': row.str.cat(sep=' ').title(), 
                     'first_last': row[0].title() + ' ' + row[2].title(),
                     'first': row[0].title(), 
                     'middle': row[1].title(), 
                     'last': row[2].title()}
+    
+
     
     # Clean up formatting a bit.
     
     result = result.assign(name_full=result.name_full.str.replace(',', '').str.replace(' Ii', ''),
                            first_last=result.first_last.str.replace(',', '').str.replace(' Ii', ''),
                            middle=result.middle.str.replace(',', ''),
-                           last=result['last'].str.replace(' Ii', ''))
+                           last=result['last'].str.replace(',', '').str.replace(' Ii', ''))
     
     return result
 
@@ -161,9 +195,11 @@ def map_pairs(url, type):
 
 def string_to_date(s):
 
-    # Convert the integer to a string.
+    # Convert the float to a string.
 
     s = str(s)
+    
+    s = s.replace('.0', '')
 
     # Return a null if the date field is null.
 
@@ -239,7 +275,6 @@ def split_zips(zips):
 # This works for the df_individuals, df_expenditures, and df_cc dataframes.
 # It assumes that there are not duplicate name entries for negative transactions.
 
-
 def remove_invalid(df):
 
     # Create a dictionary of only negative transactions with names as keys.
@@ -273,6 +308,48 @@ def remove_invalid(df):
     result = df[~df.index.isin(delete_list)]
 
     return result
+
+# identify_party()
+# This function takes in df_cc, a dataframe of transactions between PACs with a list of senders and a list of recipients, and guesses the party affiliation for each transaction using the party affiliation of candidates and PACs (in df_candidates and df_committee).
+
+def identify_party(df):
+    
+    # Initialize an empty storage dataframe.
+    
+    result = pd.DataFrame(index=range(len(df)), columns=['party', 'confidence'])
+    
+    # Create corpora of the names of senders and recipients. Match these to the most similar ones in the list of candidates and PACs with known party affiliations.
+    
+    # First define word corpora for all of the elements of interest.
+    
+    corpus_sender = list(df.sender)
+    
+    corpus_recipient = df.recipient.values
+    
+    corpus_candidates = df_candidate.first_last.values
+    
+    corpus_candidate_committees = df_candidate.committee.values
+    
+    corpus_committees = df_committee.committee.values
+    
+    # Initialize the 
+    
+    vectorizer = CountVectorizer()
+    
+    
+    
+    # Loop through every row in the original transaction dataframe.
+
+    for n in range(len(df)):
+        
+        # Define the sender and recipient.
+        
+        sender = df.sender.iloc[n]
+        
+        recipient = df.recipient.iloc[n]
+
+
+
 
 ############
 # COMMITTEES
@@ -340,6 +417,9 @@ del df_committee['zip']
 
 df_committee = pd.concat([df_committee, committee_zips], axis=1)
 
+# Drop any committees without names.
+
+df_committee = df_committee[df_committee.committee.notna()]
 
 ##########################
 # INDIVIDUAL CONTRIBUTIONS
@@ -349,7 +429,7 @@ df_committee = pd.concat([df_committee, committee_zips], axis=1)
 # Read the 2019-2020 individual contribution data.
 
 raw_individuals = pd.read_csv('C:/Users/Gabriel/Desktop/FEC/2019-2020_individual-contributions/itcont.txt',
-                              header=None, sep='|', nrows=10000)
+                              header=None, sep='|')
 
 # Fix the column names to something more legible based on the variable descriptions here: https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/.
 
@@ -412,7 +492,7 @@ df_individuals = remove_invalid(df_individuals)
 
 # Clean up and expand the formatting of the names with clean_names() defined above.
 # Then add it to the original dataframe and delete the name column.
-# Note this will take a VERY long time to run for all the individual donations (1M+ names).
+# Note this will take about 45 minutes to run for all the individual donations (1.5M+ names).
 
 individual_names = clean_names(df_individuals.name_full)
 
@@ -602,6 +682,9 @@ cc_names = clean_names(cc_people.sender)
 
 df_cc = pd.merge(df_cc, cc_names, how='left', left_index=True, right_index=True)
 
+# Drop any transactions without a sender name.
+
+df_cc = df_cc[df_cc.sender.notna()]
 
 ###########################
 # DATA CLEANING AND MERGING
@@ -647,6 +730,22 @@ df_expenditures = pd.merge(df_expenditures, committees, how='left', on='id_commi
 
 df_candidate = pd.merge(df_candidate, committees, how='left', on='id_committee')
 
+
+###################
+# PARTY AFFILIATION
+###################
+# Determine the party affiliation of committee-to-committee transactions (based on candidate names or PAC affiliations).
+# Determine PAC affiliation "scores" based on the number of transactions in different party categories.
+
+# Fill all party affiliations with "Uknown" if the field is blank.
+
+df_committee = df_committee.assign(party=df_committee.party.fillna(value='Unknown'))
+df_candidate = df_candidate.assign(party_candidate=df_candidate.party_candidate.fillna(value='Unknown'))
+
+# Determine the party affiliations of specific transfers.
+
+
+
 # Save the five finalized dataframes.
 
 df_committee.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_committee')
@@ -654,12 +753,3 @@ df_individuals.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_individua
 df_expenditures.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_expenditures')
 df_candidate.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
 df_cc.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
-
-# NEXT STEPS
-# Exploratory plots (donation amounts and distribution of locations).
-
-# https: // www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
-# https://www.fec.gov/campaign-finance-data/committee-master-file-description/
-# ZIP shapefiles: https://catalog.data.gov/dataset/tiger-line-shapefile-2015-2010-nation-u-s-2010-census-5-digit-zip-code-tabulation-area-zcta5-na
-
-# Use this URL to find original images AND committee pages. Just append the image number or committee ID: https://docquery.fec.gov/cgi-bin/fecimg/?

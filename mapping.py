@@ -138,9 +138,9 @@ zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
 
 zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
-######################
-# PLOTTING WITH FOLIUM
-######################
+###########################
+# TEST PLOTTING WITH FOLIUM
+###########################
 
 # Get donations and zip codes just for Pennsylvania.
 
@@ -172,9 +172,13 @@ df_pa = pd.concat([df_pa, df_zeros])
 
 df_pa_tiny = df_pa.sample(100)
 
-# The donation data has zip codes 15275 and 19421 but the shapefiles do not, so those records must be deleted.
+# Delete zip codes that are not in both the shapefiles and donation records.
 
-df_pa = df_pa[~df_pa.zip.isin(['15275', '19421'])]
+common_zips = set(df_pa.zip).intersection(set(pa_zips.zip))
+
+df_pa = df_pa[df_pa.zip.isin(common_zips)]
+
+pa_zips = pa_zips[pa_zips.zip.isin(common_zips)]
 
 # Test plot the PA zip code areas as GeoJSONs, without any associated data.
 # See the structure of the GeoJSON with: json_zips.get('features')[0]
@@ -186,7 +190,7 @@ json_tiny = pa_zips[pa_zips.zip.isin(df_pa_tiny.zip)].__geo_interface__
 # Create the map.
 
 m = folium.Map(location=[48, -102],
-               tiles='Mapbox Bright',
+               tiles='cartodbpositron',
                zoom_start=3)
 
 # Add a choropleth layer.
@@ -208,6 +212,78 @@ folium.LayerControl().add_to(m)
 m.save('C:/Users/Gabriel/Desktop/map.html')
 
 webbrowser.open('C:/Users/Gabriel/Desktop/map.html')
+
+###############
+# FULL PLOTTING
+###############
+# Plotting all 3,000 zip codes with associated donations. Don't plot any tracts with no donations.
+
+# Get every zip code.
+
+all_zips = zips[['zip', 'geometry']]
+
+# Find total donations by zip code.
+
+df_donations = df_individuals[['zip', 'amount']]
+
+df_donations = df_donations.groupby('zip').sum()
+
+df_donations.reset_index(level=0, inplace=True)
+
+# Add donation amounts of zero to each zip code where no donation history exists in a new dataframe.
+# zero_all_zips = all_zips.zip[~all_zips.zip.isin(df_donations.zip)]
+# df_zeros = pd.DataFrame(data=zero_all_zips, columns=['zip'])
+# df_zeros = df_zeros.assign(amount=0)
+# Combine the zeros with the original donation data.
+# df_donations = pd.concat([df_donations, df_zeros])
+
+# Delete zip codes that are not in both the shapefiles and donation records.
+
+common_zips = set(df_donations.zip).intersection(set(all_zips.zip))
+
+df_donations = df_donations[df_donations.zip.isin(common_zips)]
+
+all_zips = all_zips[all_zips.zip.isin(common_zips)]
+
+# Define percentile bins for donation amounts.
+
+bins = list(df_donations.amount.quantile([0, 0.25, 0.5, 0.75, 1]))
+
+# Create a GeoJSON with all the zip code polygons.
+
+json_zips_all = all_zips.__geo_interface__
+
+# Create the map.
+
+m = folium.Map(location=[48, -102],
+               tiles='cartodbpositron',
+               zoom_start=3)
+
+# Add a choropleth layer.
+
+folium.Choropleth(
+    geo_data=json_zips_all,
+    name='Donations',
+    data=df_donations,
+    columns=['zip', 'amount'],
+    key_on='feature.properties.zip',
+    fill_color='BuPu',
+    fill_opacity=0.7,
+    line_opacity=0.3,
+    legend_name='Donation amount ($)',
+    bins=bins,
+    smooth_factor=1.0,
+    highlight=True
+    ).add_to(m)
+
+folium.LayerControl().add_to(m)
+
+m.save('C:/Users/Gabriel/Desktop/full_map.html')
+
+
+#######
+# NOTES
+#######
 
 # Test formatting for a GeoJSON dictionary.
 
@@ -231,11 +307,6 @@ folium.Choropleth(
     line_opacity=0.2,
     legend_name='Unemployment Rate (%)'
 ).add_to(m)
-
-
-#######
-# NOTES
-#######
 
 # Turn dates to strings.
 
@@ -283,3 +354,5 @@ show(p)
 
 # ZIP shapefiles: https://catalog.data.gov/dataset/tiger-line-shapefile-2015-2010-nation-u-s-2010-census-5-digit-zip-code-tabulation-area-zcta5-na
 # City and zip shapes: https://www.census.gov/cgi-bin/geo/shapefiles/index.php.
+
+# Use this URL to find original images AND committee pages. Just append the image number or committee ID: https://docquery.fec.gov/cgi-bin/fecimg/?
