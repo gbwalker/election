@@ -7,6 +7,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import CountVectorizer
+import string
 
 # Make dataframes appear as full tables, not wrapped.
 
@@ -312,31 +313,17 @@ def remove_invalid(df):
 # identify_party()
 # This function takes in df_cc, a dataframe of transactions between PACs with a list of senders and a list of recipients, and guesses the party affiliation for each transaction using the party affiliation of candidates and PACs (in df_candidates and df_committee).
 
+# It relies on a preprocessor that strips non-letter characters from the input.
+
+def preprocess(s):
+    
+    return s.translate(str.maketrans('', '', string.punctuation + string.digits)).lower().strip()
+
 def identify_party(df):
     
     # Initialize an empty storage dataframe.
     
     result = pd.DataFrame(index=range(len(df)), columns=['party', 'confidence'])
-    
-    # Create corpora of the names of senders and recipients. Match these to the most similar ones in the list of candidates and PACs with known party affiliations.
-    
-    # First define word corpora for all of the elements of interest.
-    
-    corpus_sender = list(df.sender)
-    
-    corpus_recipient = df.recipient.values
-    
-    corpus_candidates = df_candidate.first_last.values
-    
-    corpus_candidate_committees = df_candidate.committee.values
-    
-    corpus_committees = df_committee.committee.values
-    
-    # Initialize the 
-    
-    vectorizer = CountVectorizer()
-    
-    
     
     # Loop through every row in the original transaction dataframe.
 
