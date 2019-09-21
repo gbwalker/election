@@ -6,8 +6,9 @@ from datetime import datetime
 import re
 import requests
 from bs4 import BeautifulSoup
-from sklearn.feature_extraction.text import CountVectorizer
 import string
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 
 # Make dataframes appear as full tables, not wrapped.
 
@@ -313,13 +314,25 @@ def remove_invalid(df):
 # identify_party()
 # This function takes in df_cc, a dataframe of transactions between PACs with a list of senders and a list of recipients, and guesses the party affiliation for each transaction using the party affiliation of candidates and PACs (in df_candidates and df_committee).
 
-# It relies on a preprocessor that strips non-letter characters from the input.
+# It relies on a preprocessor that converts a string to a list of individual lowercase words.
 
-def preprocess(s):
+def name_to_list(s):
     
     return s.translate(str.maketrans('', '', string.punctuation + string.digits)).lower().strip()
 
 def identify_party(df):
+    
+    # Clean all candidate names and committee names.
+    
+    committee_list = df_committee.committee.apply(name_to_list)
+    
+    candidate_first_last_list = df_candidate.first_last.apply(name_to_list)
+    
+    candidate_last_list = df_candidate['last'].apply(name_to_list)
+    
+    # Find fuzzy matches to the string of interest.
+    
+    test = process.extract('friends of hillary', committee_list, scorer=fuzz.token_sort_ratio)
     
     # Initialize an empty storage dataframe.
     
@@ -334,6 +347,8 @@ def identify_party(df):
         sender = df.sender.iloc[n]
         
         recipient = df.recipient.iloc[n]
+        
+        
 
 
 
@@ -730,6 +745,7 @@ df_committee = df_committee.assign(party=df_committee.party.fillna(value='Unknow
 df_candidate = df_candidate.assign(party_candidate=df_candidate.party_candidate.fillna(value='Unknown'))
 
 # Determine the party affiliations of specific transfers.
+
 
 
 
