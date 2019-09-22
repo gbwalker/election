@@ -322,33 +322,114 @@ def name_to_list(s):
 
 def identify_party(df):
     
-    # Clean all candidate names and committee names.
-    
-    committee_list = df_committee.committee.apply(name_to_list)
-    
-    candidate_first_last_list = df_candidate.first_last.apply(name_to_list)
-    
-    candidate_last_list = df_candidate['last'].apply(name_to_list)
-    
-    # Find fuzzy matches to the string of interest.
-    
-    test = process.extract('friends of hillary', committee_list, scorer=fuzz.token_sort_ratio)
-    
     # Initialize an empty storage dataframe.
     
-    result = pd.DataFrame(index=range(len(df)), columns=['party', 'confidence'])
+    result = pd.DataFrame(index=range(len(df)), columns=['party', 'sender', 'recipient', 'candidate_match', 'candidate_confidence', 'committee_match', 'committee_confidence'])
     
     # Loop through every row in the original transaction dataframe.
 
     for n in range(len(df)):
         
-        # Define the sender and recipient.
+        # Print a simple counter.
+        
+        if n % 10 == 0:
+            print(n)
+        
+        # Define the sender entity and save it.
         
         sender = df.sender.iloc[n]
         
-        recipient = df.recipient.iloc[n]
+        result.sender[n] = sender
+                
+        # Find a match to the sender in the candidate list.
         
+        match_candidate = process.extract(sender, df_candidate.first_last, scorer=fuzz.token_sort_ratio)
+                
+        # Save the candidate match if it's accurate enough.
         
+        if match_candidate[0][1] >= 70:
+                        
+            result.candidate_match[n] = match_candidate[0][0]
+            
+            result.candidate_confidence[n] = match_candidate[0][1]
+            
+            # Get the party information from the candidate dataframe.
+            
+            location = match_candidate[0][2]
+                        
+            result.party[n] = df_candidate.party_candidate[location]
+                
+        # If the sender is not likely a candidate, then check for a PAC.
+        
+        elif match_candidate[0][1] < 70:
+            
+            # Find a match to the sender in the committee list.
+            
+            match_committee = process.extract(sender, df_committee.committee, scorer=fuzz.token_sort_ratio)
+            
+            # Save it to the storage dataframe with the confidence level and the location of the PAC in the full list.
+            
+            result.committee_match[n] = match_committee[0][0]
+            
+            result.committee_confidence[n] = match_committee[0][1]
+            
+            # Get the party information from the committee dataframe.
+            
+            location = match_committee[0][2]
+            
+            result.party[n] = df_committee.party[location]
+    
+        #
+        # If the transaction party is still undetermined after checking the sender, check the recipient.
+        #
+        
+        if result.party[n] in ['Unknown', 'None', 'No Party Affiliation']:
+            
+            recipient = df.recipient.iloc[n]
+        
+            result.recipient[n] = recipient
+            
+            # Find a match to the recipient in the candidate list.
+        
+            match_candidate = process.extract(recipient, df_candidate.first_last, scorer=fuzz.token_sort_ratio)
+                    
+            # Save the candidate match if it's accurate enough.
+            
+            if match_candidate[0][1] >= 70:
+                            
+                result.candidate_match[n] = match_candidate[0][0]
+                
+                result.candidate_confidence[n] = match_candidate[0][1]
+                
+                # Get the party information from the candidate dataframe.
+                
+                location = match_candidate[0][2]
+                            
+                result.party[n] = df_candidate.party_candidate[location]
+                    
+            # If the recipient is not likely a candidate, then check for a PAC.
+            
+            elif match_candidate[0][1] < 70:
+                
+                # Find a match to the recipient in the committee list.
+                
+                match_committee = process.extract(recipient, df_committee.committee, scorer=fuzz.token_sort_ratio)
+                
+                # Save it to the storage dataframe with the confidence level and the location of the PAC in the full list.
+                
+                result.committee_match[n] = match_committee[0][0]
+                
+                result.committee_confidence[n] = match_committee[0][1]
+                
+                # Get the party information from the committee dataframe.
+                
+                location = match_committee[0][2]
+                
+                result.party[n] = df_committee.party[location]
+        
+    # Send back the full result.
+    
+    return result
 
 
 
