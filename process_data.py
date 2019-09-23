@@ -312,19 +312,13 @@ def remove_invalid(df):
     return result
 
 # identify_party()
-# This function takes in df_cc, a dataframe of transactions between PACs with a list of senders and a list of recipients, and guesses the party affiliation for each transaction using the party affiliation of candidates and PACs (in df_candidates and df_committee).
-
-# It relies on a preprocessor that converts a string to a list of individual lowercase words.
-
-def name_to_list(s):
-    
-    return s.translate(str.maketrans('', '', string.punctuation + string.digits)).lower().strip()
+# This function takes in a dataframe of unique PAC recipients listed in df_cc, a dataframe of transactions between PACs, and matches the party affiliation for each transaction using the party affiliation of candidates and PACs (in df_candidates and df_committee). It uses fuzzy string matching, so is accurate but not necessarily perfect.
 
 def identify_party(df):
     
     # Initialize an empty storage dataframe.
     
-    result = pd.DataFrame(index=range(len(df)), columns=['party', 'sender', 'recipient', 'candidate_match', 'candidate_confidence', 'committee_match', 'committee_confidence'])
+    result = pd.DataFrame(index=range(len(df)), columns=['party', 'recipient', 'candidate_match', 'candidate_confidence', 'committee_match', 'committee_confidence'])
     
     # Loop through every row in the original transaction dataframe.
 
@@ -335,19 +329,19 @@ def identify_party(df):
         if n % 10 == 0:
             print(n)
         
-        # Define the sender entity and save it.
+        # Define the recipient entity and save it.
         
-        sender = df.sender.iloc[n]
+        recipient = df.recipient.iloc[n]
         
-        result.sender[n] = sender
+        result.recipient[n] = recipient
                 
-        # Find a match to the sender in the candidate list.
+        # Find a match to the recipient in the candidate list.
         
-        match_candidate = process.extract(sender, df_candidate.first_last, scorer=fuzz.token_sort_ratio)
+        match_candidate = process.extract(recipient, df_candidate.committee, scorer=fuzz.token_sort_ratio, limit=1)
                 
         # Save the candidate match if it's accurate enough.
         
-        if match_candidate[0][1] >= 70:
+        if match_candidate[0][1] >= 95:
                         
             result.candidate_match[n] = match_candidate[0][0]
             
@@ -359,13 +353,13 @@ def identify_party(df):
                         
             result.party[n] = df_candidate.party_candidate[location]
                 
-        # If the sender is not likely a candidate, then check for a PAC.
+        # If the recipient is not likely a candidate, then check for a PAC.
         
-        elif match_candidate[0][1] < 70:
+        elif match_candidate[0][1] < 95:
             
-            # Find a match to the sender in the committee list.
+            # Find a match to the recipient in the committee list.
             
-            match_committee = process.extract(sender, df_committee.committee, scorer=fuzz.token_sort_ratio)
+            match_committee = process.extract(recipient, df_committee.committee, scorer=fuzz.token_sort_ratio, limit=1)
             
             # Save it to the storage dataframe with the confidence level and the location of the PAC in the full list.
             
@@ -378,20 +372,26 @@ def identify_party(df):
             location = match_committee[0][2]
             
             result.party[n] = df_committee.party[location]
+        
+    # Send back the full result.
     
-        #
-        # If the transaction party is still undetermined after checking the sender, check the recipient.
+    return result
+
+
+### OLD NOTES
+
+        # If the transaction party is still undetermined after checking the recipient, check the sender.
         #
         
         if result.party[n] in ['Unknown', 'None', 'No Party Affiliation']:
             
-            recipient = df.recipient.iloc[n]
+            sender = df.sender.iloc[n]
         
-            result.recipient[n] = recipient
+            result.sender[n] = sender
             
-            # Find a match to the recipient in the candidate list.
+            # Find a match to the sender in the candidate list.
         
-            match_candidate = process.extract(recipient, df_candidate.first_last, scorer=fuzz.token_sort_ratio)
+            match_candidate = process.extract(sender, df_candidate.first_last, scorer=fuzz.token_sort_ratio, limit=1)
                     
             # Save the candidate match if it's accurate enough.
             
@@ -407,13 +407,13 @@ def identify_party(df):
                             
                 result.party[n] = df_candidate.party_candidate[location]
                     
-            # If the recipient is not likely a candidate, then check for a PAC.
+            # If the sender is not likely a candidate, then check for a PAC.
             
             elif match_candidate[0][1] < 70:
                 
-                # Find a match to the recipient in the committee list.
+                # Find a match to the sender in the committee list.
                 
-                match_committee = process.extract(recipient, df_committee.committee, scorer=fuzz.token_sort_ratio)
+                match_committee = process.extract(sender, df_committee.committee, scorer=fuzz.token_sort_ratio, limit=1)
                 
                 # Save it to the storage dataframe with the confidence level and the location of the PAC in the full list.
                 
@@ -426,11 +426,6 @@ def identify_party(df):
                 location = match_committee[0][2]
                 
                 result.party[n] = df_committee.party[location]
-        
-    # Send back the full result.
-    
-    return result
-
 
 
 
@@ -825,8 +820,19 @@ df_candidate = pd.merge(df_candidate, committees, how='left', on='id_committee')
 df_committee = df_committee.assign(party=df_committee.party.fillna(value='Unknown'))
 df_candidate = df_candidate.assign(party_candidate=df_candidate.party_candidate.fillna(value='Unknown'))
 
-# Determine the party affiliations of specific transfers.
+# Determine the party affiliations of specific transfers based on only unique recipients (4,244 total, to save time).
 
+party_recipients = identify_party(df_cc.drop_duplicates(subset='recipient'))
+
+parties = party_recipients[['party', 'recipient']]
+
+# Map party affiliation onto every PAC transaction (in df_cc) based on recipient.
+
+df_cc = pd.merge(df_cc, parties, how='left', on='recipient')
+
+# Turn no party listed into 'Unknown,' just for consistency.
+
+df_cc['party'] = df_cc['party'].replace(to_replace='None', value='Unknown')
 
 
 
