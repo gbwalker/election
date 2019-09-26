@@ -835,6 +835,45 @@ df_cc = pd.merge(df_cc, parties, how='left', on='recipient')
 df_cc['party'] = df_cc['party'].replace(to_replace='None', value='Unknown')
 
 
+### NEXT STEP: Add in manual Rep and Dem labels with obvious answers.
+
+# Manually label 'Republican' and 'Democratic' PACs based on name. This takes a long time.
+
+reps = df_cc[df_cc.recipient.str.contains('Republican')]
+
+reps = reps.party.replace(to_replace=['Unknown', 'Other'], value='Republican Party')
+
+dems = df_cc[df_cc.recipient.str.contains('Democratic')]
+
+dems = dems.party.replace(to_replace='Unknown', value='Democratic Party')
+
+pd.merge(test, reps, how='left', left_index=True, right_index=True)
+
+
+##########################################################
+### Test function to see the results of the party mapping.
+##########################################################
+
+def get_pac():
+    
+    # get a pac
+    
+    pac = df_cc[df_cc.entity != 'Individual']
+    
+    pac = pac.drop_duplicates(subset='sender').sender.sample(1).iloc[0]
+    
+    # filter for the pac
+    
+    df = df_cc[df_cc.sender == pac]
+    
+    # print value counts
+    
+    print(pac)
+    
+    print(df.party.value_counts())
+    
+    return df
+
 
 # Save the five finalized dataframes.
 
