@@ -1,3 +1,7 @@
+#####################
+# RAW DATA PROCESSING
+#####################
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,10 +18,6 @@ from fuzzywuzzy import process
 
 pd.set_option('expand_frame_repr', False)
 pd.set_option('display.max_columns', 40)
-
-#####################
-# RAW DATA PROCESSING
-#####################
 
 ###########
 # FUNCTIONS
