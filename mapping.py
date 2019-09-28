@@ -11,7 +11,6 @@ import requests
 import re
 from bs4 import BeautifulSoup
 import json
-# import earthpy as et
 import folium
 import os
 import webbrowser
@@ -28,6 +27,7 @@ df_individuals = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_in
 df_expenditures = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_expenditures')
 df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
+zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 
 ############
 # SHAPEFILES
@@ -141,6 +141,10 @@ for n in range(len(zips_wiki.values)):
 zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
 
 zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
+
+# Save the zip shapefiles along with the cleaned data.
+
+zips.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 
 ###########################
 # TEST PLOTTING WITH FOLIUM
