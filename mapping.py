@@ -221,6 +221,61 @@ m.save('C:/Users/Gabriel/Desktop/map.html')
 
 webbrowser.open('C:/Users/Gabriel/Desktop/map.html')
 
+############################
+# TEST PLOTTING CERTAIN PACS
+############################
+
+# This function selects a PAC at random and displays all the donation data associated with it. Similar to what the real app should do to see if the zip code areas are too tiny to display...
+
+def map_pac():
+    
+    # Select a PAC at random.
+    
+    pac = df_cc[df_cc.entity != 'Individual']
+    
+    pac = pac.drop_duplicates(subset='sender').sender.sample(1).iloc[0]
+    
+    # Filter transactions for just the ones that the PAC sent.
+    
+    df = df_cc[df_cc.sender == pac][['zip', 'amount']]
+    
+    # Sum by zip code.
+    
+    df = df.groupby('zip').sum().reset_index()
+    
+    # Get only the zip codes for where the PAC has sent funds.
+    
+    pac_zips = zips[zips.zip.astype('int').isin(list(df.zip.values.astype('int')))]
+    
+    # Map the zip code areas with a choropleth.
+    
+    json_zips = pac_zips.__geo_interface__
+
+    # Create the map.
+
+    m = folium.Map(location=[48, -102],
+                tiles='cartodbpositron',
+                zoom_start=3)
+
+    # Add a choropleth layer.
+
+    folium.Choropleth(
+        geo_data=json_zips,
+        name='Donations',
+        data=df,
+        columns=['zip', 'amount'],
+        key_on='feature.properties.zip',
+        fill_color='BuPu',
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name='Donation amount ($)'
+        ).add_to(m)
+
+    folium.LayerControl().add_to(m)
+
+    return m
+
+
 ###############
 # FULL PLOTTING
 ###############
