@@ -54,6 +54,44 @@ sf_states = sf_states[['name', 'geometry']]
 
 sf_states = sf_states[~sf_states.name.isin(['United States Virgin Islands', 'Commonwealth of the Northern Mariana Islands', 'Guam', 'American Samoa', 'Puerto Rico'])]
 
+# Scrape the list of state abbreviations from the web.
+
+url = 'https://www.50states.com/abbreviations.htm'
+
+raw_states = requests.get(url).text
+soup_states = BeautifulSoup(raw_states)
+clean_soup = soup_states.find_all('td')
+
+# Save all the tags into a dataframe and turn them into readable strings.
+
+state_abbvs = pd.DataFrame(pd.Series(clean_soup), columns=['tag'])
+
+state_abbvs = state_abbvs.assign(tag=state_abbvs.tag.astype('str'))
+
+# Iterate through all the tags and collect the corresponding abbreviations.
+
+state_abbreviations = pd.DataFrame(index=range(len(state_abbvs)), columns=['abbreviation', 'state'])
+
+for n in range(len(state_abbvs.values)):
+        
+    if n % 2 == 0:
+        
+        state_abbreviations.state[n] = re.search(r'>[\w\s]+<', state_abbvs.tag[n])[0].replace('>', '').replace('<', '')
+        
+    if n % 2 == 1:
+        
+        state_abbreviations.abbreviation[n - 1] = re.search(r'>[\w\s]+<', state_abbvs.tag[n])[0].replace('>', '').replace('<', '')
+
+# Drop empty rows and save as a dictionary for mapping.
+
+state_abbreviations = state_abbreviations.dropna()
+
+state_mapping = dict(zip(state_abbreviations.abbreviation, state_abbreviations.state))
+
+# Map state abbreviations to names in df_cc.
+
+df_cc['state'] = df_cc['state'].map(state_mapping)
+
 # See the full extent of the polygons: sf.total_bounds
 # See the CRS (coordinate reference system): sf.crs
 # See which polygons are noncontiguous: sf.geom_type
@@ -142,9 +180,17 @@ zip_prefixes = zip_prefixes.assign(prefix=zip_prefixes.prefix.astype('str'))
 
 zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
+# Add a centroid to each zip code area.
+
+zips = zips.assign(center=zips.geometry.centroid)
+
+zip_points = zips[['zip', 'state', 'city', 'center']]
+
 # Save the zip shapefiles along with the cleaned data.
 
 zips.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
+
+zip_points.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 
 ###########################
 # TEST PLOTTING WITH FOLIUM
@@ -235,6 +281,8 @@ def map_pac():
     
     pac = pac.drop_duplicates(subset='sender').sender.sample(1).iloc[0]
     
+    print(pac)
+    
     # Filter transactions for just the ones that the PAC sent.
     
     df = df_cc[df_cc.sender == pac][['zip', 'amount']]
@@ -243,13 +291,15 @@ def map_pac():
     
     df = df.groupby('zip').sum().reset_index()
     
+    print(df)
+    
     # Get only the zip codes for where the PAC has sent funds.
     
-    pac_zips = zips[zips.zip.astype('int').isin(list(df.zip.values.astype('int')))]
+    pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
     
-    # Map the zip code areas with a choropleth.
+    # Map the state areas with a choropleth.
     
-    json_zips = pac_zips.__geo_interface__
+    # json_zips = pac_zips.__geo_interface__
 
     # Create the map.
 
@@ -257,21 +307,29 @@ def map_pac():
                 tiles='cartodbpositron',
                 zoom_start=3)
 
-    # Add a choropleth layer.
-
-    folium.Choropleth(
-        geo_data=json_zips,
-        name='Donations',
-        data=df,
-        columns=['zip', 'amount'],
-        key_on='feature.properties.zip',
-        fill_color='BuPu',
-        fill_opacity=0.7,
-        line_opacity=0.2,
-        legend_name='Donation amount ($)'
+    # Add points to the map representing where donations are from.
+    
+    for n in range(len(pac_zips)):
+        
+        folium.CircleMarker(
+            location=(pac_zips.center.iloc[n].x, pac_zips.center.iloc[n].y)
         ).add_to(m)
 
-    folium.LayerControl().add_to(m)
+    # Add a choropleth layer.
+
+    # folium.Choropleth(
+    #     geo_data=json_zips,
+    #     name='Donations',
+    #     data=df,
+    #     columns=['zip', 'amount'],
+    #     key_on='feature.properties.zip',
+    #     fill_color='BuPu',
+    #     fill_opacity=0.7,
+    #     line_opacity=0.2,
+    #     legend_name='Donation amount ($)'
+    #     ).add_to(m)
+
+    # folium.LayerControl().add_to(m)
 
     return m
 
