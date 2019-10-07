@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
+from shapely.geometry import Point
 import requests
 import re
 from bs4 import BeautifulSoup
@@ -90,7 +91,9 @@ state_mapping = dict(zip(state_abbreviations.abbreviation, state_abbreviations.s
 
 # Map state abbreviations to names in df_cc.
 
-df_cc['state'] = df_cc['state'].map(state_mapping)
+df_cc = df_cc.assign(state_ab=df_cc.state)
+
+df_cc = df_cc.assign(state=df_cc['state'].map(state_mapping))
 
 # See the full extent of the polygons: sf.total_bounds
 # See the CRS (coordinate reference system): sf.crs
@@ -113,6 +116,10 @@ for n in range(len(zips.zip)):
 
 # Plot just the zip codes in the committee list.
 # zips[zips.zip.isin(df_committee.zip.values)].plot()
+
+# Save the state shapes.
+
+sf_states.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
 ###########
 # ZIP CODES
@@ -184,6 +191,16 @@ zips = pd.merge(zips, zip_prefixes, how='left', on='prefix')
 
 zips = zips.assign(center=zips.geometry.centroid)
 
+# Reclassify Washington, DC, areas and centers correctly (marked both 'city' and 'state' as 'Washington').
+
+dc = zips[(zips.state == 'Washington') & (zips.city == 'Washington')]
+
+dc = dc.assign(state='District of Columbia')
+
+zips.loc[dc.index] = dc
+
+# Make a separate list of just the center points.
+
 zip_points = zips[['zip', 'state', 'city', 'center']]
 
 # Save the zip shapefiles along with the cleaned data.
@@ -250,7 +267,7 @@ m = folium.Map(location=[48, -102],
 # Add a choropleth layer.
 
 folium.Choropleth(
-    geo_data=json_zips,
+    geo_data=json_tiny,
     name='Donations',
     data=df_pa,
     columns=['zip', 'amount'],
@@ -287,6 +304,8 @@ def map_pac():
     
     df = df_cc[df_cc.sender == pac][['zip', 'amount']]
     
+    states = df_cc[df_cc.sender == pac].state
+    
     # Sum by zip code.
     
     df = df.groupby('zip').sum().reset_index()
@@ -297,9 +316,21 @@ def map_pac():
     
     pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
     
+    # If no zip code points exist, use the centroids of each of the states.
+    
+    if pac_zip_points.zip.empty:
+        
+        pac_zip_points = sf_states[sf_states.name.isin(states)].assign(geometry=sf_states.geometry.centroid)
+    
+        pac_zip_points.columns = ['state', 'center']
+    
+    # Also get state polygons for the relevant transactions.
+    
+    pac_states = sf_states[sf_states.name.isin(pac_zip_points.state)]
+    
     # Map the state areas with a choropleth.
     
-    # json_zips = pac_zips.__geo_interface__
+    json_states = pac_states.__geo_interface__
 
     # Create the map.
 
@@ -309,25 +340,25 @@ def map_pac():
 
     # Add points to the map representing where donations are from.
     
-    for n in range(len(pac_zips)):
+    for n in range(len(pac_zip_points)):
         
-        folium.CircleMarker(
-            location=(pac_zips.center.iloc[n].x, pac_zips.center.iloc[n].y)
+        folium.Marker(
+            location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x)
         ).add_to(m)
 
-    # Add a choropleth layer.
+    # Add a choropleth layer for the state.
 
-    # folium.Choropleth(
-    #     geo_data=json_zips,
-    #     name='Donations',
-    #     data=df,
-    #     columns=['zip', 'amount'],
-    #     key_on='feature.properties.zip',
-    #     fill_color='BuPu',
-    #     fill_opacity=0.7,
-    #     line_opacity=0.2,
-    #     legend_name='Donation amount ($)'
-    #     ).add_to(m)
+    folium.Choropleth(
+        geo_data=json_states,
+        name='Donations',
+        data=df,
+        columns=['zip', 'amount'],
+        key_on='feature.properties.name',
+        fill_color='BuPu',
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name='Donation amount ($)'
+    ).add_to(m)
 
     # folium.LayerControl().add_to(m)
 
