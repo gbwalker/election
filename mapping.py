@@ -7,12 +7,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
-from shapely.geometry import Point
 import requests
 import re
 from bs4 import BeautifulSoup
 import json
 import folium
+from folium.plugins import MarkerCluster
 import os
 import webbrowser
 # from bokeh.plotting import figure, show, output_file
@@ -313,7 +313,7 @@ def map_pac():
     
     zip_totals = df.groupby('zip').sum().reset_index()
     
-    # Get only the zip codes and states from which individuals have contributed.
+    # Get the zip codes and states from which individuals have contributed OR where the PAC has sent funds.
     
     pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
     
@@ -357,9 +357,10 @@ def map_pac():
 
     # Create the map.
 
-    m = folium.Map(location=[48, -102],
+    m = folium.Map(location=[39.5, -98.35],
                 tiles='cartodbpositron',
-                zoom_start=3)
+                zoom_start=5,
+                min_zoom=5)
 
     # Add a choropleth layer for the state.
 
@@ -374,19 +375,52 @@ def map_pac():
         line_opacity=0.2,
         legend_name='State-wide donation amount ($)'
     ).add_to(m)
+    
+    # Add popups for each state.
+        
+    # geo_overlay = pd.merge(pac_states, df, how='left', left_on='name', right_on='state')[['name', 'geometry', 'amount']]
+    
+    # folium.GeoJson(
+    #     data=geo_overlay.to_json(),
+    #     name='Donations',
+    #     show=True,
+    #     style_function=lambda feature: {
+    #         'fillColor': 'green',
+    #         'color': 'black',
+    #         'weight': 1,
+    #         'fillOpacity': 0.5
+    #     },   
+    #     highlight_function=lambda x: {'weight': 3, 
+    #                                   'color': 'white',
+    #                                   'fillOpacity': 0.5},
+    #     tooltip=folium.features.GeoJsonTooltip(
+    #         fields=['amount'],
+    #         aliases=['Total ($)'],
+    #         style=''
+    #     )
+    # ).add_to(m)
 
     # Add points to the map representing where donations are from.
+    # Start with a marker cluster.
+    
+    cluster = MarkerCluster(
+        options={'maxClusterRadius': 10}
+        ).add_to(m)
     
     for n in range(len(pac_zip_points)):
         
         folium.CircleMarker(
             location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
-            tooltip='$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + '<br/>' + pac_zip_points.city.iloc[n] + ', ' + pac_zip_points.state.iloc[n] + '<br/>' + pac_zip_points.zip.iloc[n],
+            tooltip='$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + ' contributed' + '<br/>' + pac_zip_points.city.iloc[n] + ', ' + pac_zip_points.state.iloc[n] + '<br/>' + 'Zip: ' + pac_zip_points.zip.iloc[n],
             radius=np.log(pac_zip_points.amount.iloc[n])*3,
             color='green',
             fill=True,
             fill_color='green'
-        ).add_to(m)
+        ).add_to(cluster)
+
+    # NEXT STEP: Add different colored marks for transactions sent, not received.
+
+
 
     return m
 
