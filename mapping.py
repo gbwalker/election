@@ -29,6 +29,7 @@ df_expenditures = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_e
 df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
+zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 
 ############
 # SHAPEFILES
@@ -89,11 +90,15 @@ state_abbreviations = state_abbreviations.dropna()
 
 state_mapping = dict(zip(state_abbreviations.abbreviation, state_abbreviations.state))
 
-# Map state abbreviations to names in df_cc.
+# Map state abbreviations to names in both df_cc and df_individuals.
 
 df_cc = df_cc.assign(state_ab=df_cc.state)
 
+df_individuals = df_individuals.assign(state_ab=df_individuals.state)
+
 df_cc = df_cc.assign(state=df_cc['state'].map(state_mapping))
+
+df_individuals = df_individuals.assign(state=df_individuals['state'].map(state_mapping))
 
 # See the full extent of the polygons: sf.total_bounds
 # See the CRS (coordinate reference system): sf.crs
@@ -294,39 +299,57 @@ def map_pac():
     
     # Select a PAC at random.
     
-    pac = df_cc[df_cc.entity != 'Individual']
+    # pac = df_cc[df_cc.entity != 'Individual']
     
-    pac = pac.drop_duplicates(subset='sender').sender.sample(1).iloc[0]
+    pac = df_individuals.drop_duplicates(subset='recipient').recipient.sample(1).iloc[0]
     
     print(pac)
     
     # Filter transactions for just the ones that the PAC sent.
     
-    df = df_cc[df_cc.sender == pac][['zip', 'amount']]
+    df = df_individuals[df_individuals.recipient == pac][['state', 'zip', 'amount']]
     
-    states = df_cc[df_cc.sender == pac].state
+    # Get the total by each zip code to determine the marker size on the map.
     
-    # Sum by zip code.
+    zip_totals = df.groupby('zip').sum().reset_index()
     
-    df = df.groupby('zip').sum().reset_index()
-    
-    print(df)
-    
-    # Get only the zip codes for where the PAC has sent funds.
+    # Get only the zip codes and states from which individuals have contributed.
     
     pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
     
+    states = df_individuals[df_individuals.recipient == pac].state.drop_duplicates()
+    
+    # Merge in the zip code amounts that determine circle size.
+    
+    if not pac_zip_points.zip.empty:
+    
+        pac_zip_points = pd.merge(pac_zip_points, zip_totals, how='left', on='zip')
+        
+        # Fill null donation amounts with a 1.
+        
+        pac_zip_points = pac_zip_points.fillna(value={'amount': 1})
+        
     # If no zip code points exist, use the centroids of each of the states.
     
     if pac_zip_points.zip.empty:
         
         pac_zip_points = sf_states[sf_states.name.isin(states)].assign(geometry=sf_states.geometry.centroid)
+        
+        # Also add in a set contribution amount for the zip code.
+        
+        pac_zip_points = pac_zip_points.assign(amount=1)
     
-        pac_zip_points.columns = ['state', 'center']
+        pac_zip_points.columns = ['name', 'center', 'amount']
+    
+    # Sum donations by state for creating a choropleth.
+    
+    df = df.groupby('state').sum().reset_index()
+    
+    print(df)
     
     # Also get state polygons for the relevant transactions.
     
-    pac_states = sf_states[sf_states.name.isin(pac_zip_points.state)]
+    pac_states = sf_states[sf_states.name.isin(df.state)]
     
     # Map the state areas with a choropleth.
     
@@ -338,32 +361,38 @@ def map_pac():
                 tiles='cartodbpositron',
                 zoom_start=3)
 
-    # Add points to the map representing where donations are from.
-    
-    for n in range(len(pac_zip_points)):
-        
-        folium.Marker(
-            location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x)
-        ).add_to(m)
-
     # Add a choropleth layer for the state.
 
     folium.Choropleth(
         geo_data=json_states,
         name='Donations',
         data=df,
-        columns=['zip', 'amount'],
+        columns=['state', 'amount'],
         key_on='feature.properties.name',
-        fill_color='BuPu',
+        fill_color='YlGn',
         fill_opacity=0.7,
         line_opacity=0.2,
-        legend_name='Donation amount ($)'
+        legend_name='State-wide donation amount ($)'
     ).add_to(m)
 
-    # folium.LayerControl().add_to(m)
+    # Add points to the map representing where donations are from.
+    
+    for n in range(len(pac_zip_points)):
+        
+        folium.CircleMarker(
+            location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
+            tooltip='$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + '<br/>' + pac_zip_points.city.iloc[n] + ', ' + pac_zip_points.state.iloc[n] + '<br/>' + pac_zip_points.zip.iloc[n],
+            radius=np.log(pac_zip_points.amount.iloc[n])*3,
+            color='green',
+            fill=True,
+            fill_color='green'
+        ).add_to(m)
 
     return m
 
+# For saving the map output.
+
+m.save('C:/Users/Gabriel/Desktop/map.html')
 
 ###############
 # FULL PLOTTING
