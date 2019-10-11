@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import json
 import folium
 from folium.plugins import MarkerCluster
+from folium.features import DivIcon
 import os
 import webbrowser
 # from bokeh.plotting import figure, show, output_file
@@ -306,6 +307,7 @@ def map_pac():
     # Some example PACs that are more challenging.
     # pac = 'Nextera Energy, Inc. Political Action Committee'
     # pac = 'Pac To The Future'
+    # pac = 'Walden For Congress'
     
     print(pac)
     
@@ -316,7 +318,7 @@ def map_pac():
     # Get the total by each zip code to determine the marker size on the map.
     
     zip_totals = df.groupby('zip').sum().reset_index()
-    
+     
     # Get the zip codes and states from which individuals have contributed OR where the PAC has sent funds.
     
     pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
@@ -361,10 +363,13 @@ def map_pac():
 
     # Create the map.
 
-    m = folium.Map(location=[39.5, -98.35],
-                tiles='cartodbpositron',
-                zoom_start=5,
-                min_zoom=4)
+    m = folium.Map(
+        name='PAC finances',
+        location=[39.5, -98.35],
+        tiles='cartodbpositron',
+        zoom_start=5,
+        min_zoom=4
+        )
 
     # Add a choropleth layer for the state.
 
@@ -377,7 +382,8 @@ def map_pac():
         fill_color='YlGn',
         fill_opacity=0.7,
         line_opacity=0.2,
-        legend_name='State-wide donation amount ($)'
+        legend_name='State-wide donation amount ($)',
+        control=False
     ).add_to(m)
     
     # Add transparent popup donation amounts for each state.
@@ -392,6 +398,7 @@ def map_pac():
         data=donation_overlay.to_json(),
         name='State donations',
         show=True,
+        control=False,
         style_function=lambda feature: {
             # 'fillColor': 'green',
             'color': 'black',
@@ -412,7 +419,10 @@ def map_pac():
     # Start with a marker cluster.
     
     cluster = MarkerCluster(
-        options={'maxClusterRadius': 10, 'circleFootSeparation': 60}
+        name='Contributions and PAC transfers',
+        options={'maxClusterRadius': 10, 
+                 'showCoverageOnHover': 'true',
+                 'spiderfyDistanceMultiplier': 3}
         ).add_to(m)
     
     for n in range(len(pac_zip_points)):
@@ -429,13 +439,22 @@ def map_pac():
         
         # Plot the points.
         
-        folium.CircleMarker(
+        # folium.CircleMarker(
+        #     location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
+        #     tooltip=('$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + ' of contributions' + '<br/>' + city + pac_zip_points.state.iloc[n] + '<br/>' + 'Zip: ' + pac_zip_points.zip.iloc[n]),
+        #     radius=np.log(pac_zip_points.amount.iloc[n])*4,
+        #     color='green',
+        #     fill=True,
+        #     fill_color='green'
+        # ).add_to(cluster)
+        
+        folium.Marker(
             location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
-            tooltip=('$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + ' of contributions' + '<br/>' + city + pac_zip_points.state.iloc[n] + '<br/>' + 'Zip: ' + pac_zip_points.zip.iloc[n]),
-            radius=np.log(pac_zip_points.amount.iloc[n])*4,
-            color='green',
-            fill=True,
-            fill_color='green'
+            icon=DivIcon(
+                icon_anchor=(0,0),
+                icon_size=(150,36),
+                html='<div style=\"font-size: 8pt\"><b>$%s<br/>%s</b></div>' % ('{:,}'.format(pac_zip_points.amount.iloc[n]), city),
+            )
         ).add_to(cluster)
 
     # Add different colored marks for transactions sent by the PAC, not received.
@@ -485,7 +504,11 @@ def map_pac():
                 fill_color='red'
             ).add_to(cluster)
 
-    return m
+    folium.LayerControl().add_to(m)
+
+    m.save('C:/Users/Gabriel/Desktop/map.html')
+
+    return
 
 # For saving the map output.
 
