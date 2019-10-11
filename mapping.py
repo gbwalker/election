@@ -31,6 +31,7 @@ df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cand
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
+state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 
 ############
 # SHAPEFILES
@@ -88,6 +89,8 @@ for n in range(len(state_abbvs.values)):
 # Drop empty rows and save as a dictionary for mapping.
 
 state_abbreviations = state_abbreviations.dropna()
+
+# state_abbreviations.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 
 state_mapping = dict(zip(state_abbreviations.abbreviation, state_abbreviations.state))
 
@@ -305,6 +308,7 @@ def map_pac():
     pac = df_individuals.drop_duplicates(subset='recipient').recipient.sample(1).iloc[0]
     
     # Some example PACs that are more challenging.
+    # huge mess... pac = 'Independent Insurance Agents & Brokers Of America, Inc. Political Action Committee (Insurpac)'
     # pac = 'Nextera Energy, Inc. Political Action Committee'
     # pac = 'Pac To The Future'
     # pac = 'Walden For Congress'
@@ -312,8 +316,9 @@ def map_pac():
     print(pac)
     
     # Filter transactions for just the ones that the PAC sent.
+    # Also delete any null values.
     
-    df = df_individuals[df_individuals.recipient == pac][['state', 'zip', 'amount']]
+    df = df_individuals[df_individuals.recipient == pac][['state', 'zip', 'amount']].dropna(axis='rows')
     
     # Get the total by each zip code to determine the marker size on the map.
     
@@ -321,9 +326,9 @@ def map_pac():
      
     # Get the zip codes and states from which individuals have contributed OR where the PAC has sent funds.
     
-    pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))]
+    pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))].dropna(axis='rows')
     
-    states = df_individuals[df_individuals.recipient == pac].state.drop_duplicates()
+    states = df_individuals[df_individuals.recipient == pac].state.drop_duplicates().dropna(axis='rows')
     
     # Merge in the zip code amounts that determine circle size.
     
@@ -361,7 +366,11 @@ def map_pac():
     
     json_states = pac_states.__geo_interface__
 
-    # Create the map.
+    # Create a state mapping for abbreviations.
+    
+    state_mapping = dict(zip(state_abbreviations.state, state_abbreviations.abbreviation))
+
+    ### Create the map.
 
     m = folium.Map(
         name='PAC finances',
@@ -422,7 +431,7 @@ def map_pac():
         name='Contributions and PAC transfers',
         options={'maxClusterRadius': 10, 
                  'showCoverageOnHover': 'true',
-                 'spiderfyDistanceMultiplier': 3}
+                 'spiderfyDistanceMultiplier': 4}
         ).add_to(m)
     
     for n in range(len(pac_zip_points)):
@@ -448,20 +457,27 @@ def map_pac():
         #     fill_color='green'
         # ).add_to(cluster)
         
+        # Get the state abbreviation with the state mapping.
+        
+        state = state_mapping[pac_zip_points.state.iloc[n]]
+        
         folium.Marker(
             location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
             icon=DivIcon(
-                icon_anchor=(0,0),
+                icon_anchor=(-10,-10),
                 icon_size=(150,36),
-                html='<div style=\"font-size: 8pt\"><b>$%s<br/>%s</b></div>' % ('{:,}'.format(pac_zip_points.amount.iloc[n]), city),
+                html='<div style=\"font-size: 8pt\">$%s received<br/>%s%s</div>' % ('{:,}'.format(pac_zip_points.amount.iloc[n]), city, state),
             )
         ).add_to(cluster)
 
     # Add different colored marks for transactions sent by the PAC, not received.
-
     # Identify transactions of interest based on recipient zip codes.
     
-    df_sent = df_cc[df_cc.sender == pac][['city', 'state', 'zip', 'amount', 'date', 'recipient', 'image']]
+    df_sent = df_cc[df_cc.sender == pac][['city', 'state', 'zip', 'amount', 'date', 'recipient']]
+    
+    # Find totals by zip code.
+    
+    df_sent = df_sent.groupby('zip').sum().reset_index()
 
     # If there are transactions, proceed.
     
@@ -471,7 +487,7 @@ def map_pac():
 
         # Add the center point to the information about the received transaction.
         
-        df_sent = pd.merge(df_sent, pac_zip_sent[['zip', 'center']], how='left', on='zip')
+        df_sent = pd.merge(df_sent, pac_zip_sent[['zip', 'city', 'state', 'center']], how='left', on='zip').dropna(axis='rows')
 
         # Plot all the sent transactions.
         
@@ -495,13 +511,26 @@ def map_pac():
             
             # Then add the marker.
             
-            folium.CircleMarker(
+            # folium.CircleMarker(
+            #     location=(df_sent.center.iloc[n].y, df_sent.center.iloc[n].x),
+            #     tooltip=('$' + ('{:,}'.format(df_sent.amount.iloc[n])) + ' transferred to' + '<br/>' + df_sent.recipient.iloc[n] + '<br/>' + city + df_sent.state.iloc[n] + '<br/>' + 'Zip: ' + df_sent.zip.iloc[n]),
+            #     radius=np.log(df_sent.amount.iloc[n])*4,
+            #     color='red',
+            #     fill=True,
+            #     fill_color='red'
+            # ).add_to(cluster)
+            
+            # Get the state abbreviation with the state mapping.
+        
+            state = state_mapping[df_sent.state.iloc[n]]
+            
+            folium.Marker(
                 location=(df_sent.center.iloc[n].y, df_sent.center.iloc[n].x),
-                tooltip=('$' + ('{:,}'.format(df_sent.amount.iloc[n])) + ' transferred to' + '<br/>' + df_sent.recipient.iloc[n] + '<br/>' + city + df_sent.state.iloc[n] + '<br/>' + 'Zip: ' + df_sent.zip.iloc[n]),
-                radius=np.log(df_sent.amount.iloc[n])*4,
-                color='red',
-                fill=True,
-                fill_color='red'
+                icon=DivIcon(
+                    icon_anchor=(-10,-10),
+                    icon_size=(150,36),
+                    html='<div style=\"font-size: 8pt; color: red\">$%s transferred<br/>%s%s</div>' % ('{:,}'.format(df_sent.amount.iloc[n]), city, state),
+                )
             ).add_to(cluster)
 
     folium.LayerControl().add_to(m)
