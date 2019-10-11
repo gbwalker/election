@@ -32,6 +32,7 @@ df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
+sf_states.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
 ############
 # SHAPEFILES
@@ -57,6 +58,9 @@ sf_states = sf_states[['name', 'geometry']]
 # Remove extra states that are not the contiguous 50 or Alaska/Hawaii.
 
 sf_states = sf_states[~sf_states.name.isin(['United States Virgin Islands', 'Commonwealth of the Northern Mariana Islands', 'Guam', 'American Samoa', 'Puerto Rico'])]
+
+# Save the state shape files.
+# sf_states.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
 # Scrape the list of state abbreviations from the web.
 
@@ -308,7 +312,8 @@ def map_pac():
     pac = df_individuals.drop_duplicates(subset='recipient').recipient.sample(1).iloc[0]
     
     # Some example PACs that are more challenging.
-    # huge mess... pac = 'Independent Insurance Agents & Brokers Of America, Inc. Political Action Committee (Insurpac)'
+    # pac = 'Independent Insurance Agents & Brokers Of America, Inc. Political Action Committee (Insurpac)' # huge mess...
+    # pac = 'Senate Conservatives Fund' # many donations!
     # pac = 'Nextera Energy, Inc. Political Action Committee'
     # pac = 'Pac To The Future'
     # pac = 'Walden For Congress'
@@ -336,9 +341,9 @@ def map_pac():
     
         pac_zip_points = pd.merge(pac_zip_points, zip_totals, how='left', on='zip')
         
-        # Fill null donation amounts with a 1.
+        # Delete null donation amounts.
         
-        pac_zip_points = pac_zip_points.fillna(value={'amount': 1})
+        pac_zip_points = pac_zip_points.dropna(axis='rows')
         
     # If no zip code points exist, use the centroids of each of the states.
     
@@ -428,7 +433,7 @@ def map_pac():
     # Start with a marker cluster.
     
     cluster = MarkerCluster(
-        name='Contributions and PAC transfers',
+        name='Contributions',
         options={'maxClusterRadius': 10, 
                  'showCoverageOnHover': 'true',
                  'spiderfyDistanceMultiplier': 4}
@@ -446,29 +451,29 @@ def map_pac():
             
             city = pac_zip_points.city.iloc[n] + ', '
         
-        # Plot the points.
-        
-        # folium.CircleMarker(
-        #     location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
-        #     tooltip=('$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + ' of contributions' + '<br/>' + city + pac_zip_points.state.iloc[n] + '<br/>' + 'Zip: ' + pac_zip_points.zip.iloc[n]),
-        #     radius=np.log(pac_zip_points.amount.iloc[n])*4,
-        #     color='green',
-        #     fill=True,
-        #     fill_color='green'
-        # ).add_to(cluster)
-        
         # Get the state abbreviation with the state mapping.
         
         state = state_mapping[pac_zip_points.state.iloc[n]]
         
-        folium.Marker(
+        # Plot the points.
+        
+        folium.CircleMarker(
             location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
-            icon=DivIcon(
-                icon_anchor=(-10,-10),
-                icon_size=(150,36),
-                html='<div style=\"font-size: 8pt\">$%s received<br/>%s%s</div>' % ('{:,}'.format(pac_zip_points.amount.iloc[n]), city, state),
-            )
+            tooltip=('$' + ('{:,}'.format(pac_zip_points.amount.iloc[n])) + ' of contributions' + '<br/>' + city + state + '<br/>' + 'Zip: ' + pac_zip_points.zip.iloc[n]),
+            radius=4, # np.log(pac_zip_points.amount.iloc[n])*4,
+            color='gray',
+            fill=True,
+            fill_color='gray'
         ).add_to(cluster)
+        
+        # folium.Marker(
+        #     location=(pac_zip_points.center.iloc[n].y, pac_zip_points.center.iloc[n].x),
+        #     icon=DivIcon(
+        #         icon_anchor=(-10,-10),
+        #         icon_size=(150,36),
+        #         html='<div style=\"font-size: 8pt\">$%s received<br/>%s%s</div>' % ('{:,}'.format(pac_zip_points.amount.iloc[n]), city, state),
+        #     )
+        # ).add_to(cluster)
 
     # Add different colored marks for transactions sent by the PAC, not received.
     # Identify transactions of interest based on recipient zip codes.
@@ -483,6 +488,17 @@ def map_pac():
     
     if not df_sent.zip.empty:
 
+        # Make another cluster for transactions, not donations.
+        
+        cluster2 = MarkerCluster(
+        name='PAC transfers',
+        options={'maxClusterRadius': 10, 
+                 'showCoverageOnHover': 'true',
+                 'spiderfyDistanceMultiplier': 4}
+        ).add_to(m)
+
+        # Find zips where funds were transfered to.
+        
         pac_zip_sent = zip_points[zip_points.zip.astype('int').isin(list(df_sent.zip.values.astype('int')))]
 
         # Add the center point to the information about the received transaction.
@@ -509,29 +525,29 @@ def map_pac():
                 
                 city = df_sent.city.iloc[n] + ', '
             
-            # Then add the marker.
-            
-            # folium.CircleMarker(
-            #     location=(df_sent.center.iloc[n].y, df_sent.center.iloc[n].x),
-            #     tooltip=('$' + ('{:,}'.format(df_sent.amount.iloc[n])) + ' transferred to' + '<br/>' + df_sent.recipient.iloc[n] + '<br/>' + city + df_sent.state.iloc[n] + '<br/>' + 'Zip: ' + df_sent.zip.iloc[n]),
-            #     radius=np.log(df_sent.amount.iloc[n])*4,
-            #     color='red',
-            #     fill=True,
-            #     fill_color='red'
-            # ).add_to(cluster)
-            
             # Get the state abbreviation with the state mapping.
         
             state = state_mapping[df_sent.state.iloc[n]]
             
-            folium.Marker(
+            # Then add the marker.
+            
+            folium.CircleMarker(
                 location=(df_sent.center.iloc[n].y, df_sent.center.iloc[n].x),
-                icon=DivIcon(
-                    icon_anchor=(-10,-10),
-                    icon_size=(150,36),
-                    html='<div style=\"font-size: 8pt; color: red\">$%s transferred<br/>%s%s</div>' % ('{:,}'.format(df_sent.amount.iloc[n]), city, state),
-                )
-            ).add_to(cluster)
+                tooltip=('$' + ('{:,}'.format(df_sent.amount.iloc[n])) + ' transferred' + '<br/>' + city + state + '<br/>' + 'Zip: ' + df_sent.zip.iloc[n]),
+                radius=3, # np.log(df_sent.amount.iloc[n])*4,
+                color='red',
+                fill=True,
+                fill_color='red'
+            ).add_to(cluster2)
+            
+            # folium.Marker(
+            #     location=(df_sent.center.iloc[n].y, df_sent.center.iloc[n].x),
+            #     icon=DivIcon(
+            #         icon_anchor=(-10,-10),
+            #         icon_size=(150,36),
+            #         html='<div style=\"font-size: 8pt; color: red\">$%s transferred<br/>%s%s</div>' % ('{:,}'.format(df_sent.amount.iloc[n]), city, state),
+            #     )
+            # ).add_to(cluster)
 
     folium.LayerControl().add_to(m)
 
