@@ -29,7 +29,7 @@ df_individuals = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_in
 df_expenditures = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_expenditures')
 df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
-zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
+# zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 sf_states.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
@@ -306,9 +306,7 @@ webbrowser.open('C:/Users/Gabriel/Desktop/map.html')
 def map_pac():
     
     # Select a PAC at random.
-    
-    # pac = df_cc[df_cc.entity != 'Individual']
-    
+        
     pac = df_individuals.drop_duplicates(subset='recipient').recipient.sample(1).iloc[0]
     
     # Some example PACs that are more challenging.
@@ -347,6 +345,8 @@ def map_pac():
         
         pac_zip_points = sf_states[sf_states.name.isin(states)].assign(geometry=sf_states.geometry.centroid)
         
+        pac_zip_points.columns = ['state', 'geometry']
+        
         # Merge in the center points by state.
         
         df = pd.merge(df, pac_zip_points, how='left', on='state')
@@ -376,7 +376,12 @@ def map_pac():
         tiles=None,
         zoom_start=5,
         min_zoom=4,
-        prefer_canvas=True
+        prefer_canvas=True,
+        zoom_control=False,
+        min_lat=-15, # Least point is -14.2.
+        max_lat=72, # Greatest point is 71.3.
+        min_lon=-177, # Least point is -176.6.
+        max_lon=146 # Greatest point is 145.8
         )
     
     folium.TileLayer(
@@ -481,6 +486,10 @@ def map_pac():
     
     df_transfers = df_cc[df_cc.sender == pac][['city', 'state', 'zip', 'amount', 'date', 'recipient', 'image']]
     
+    # Drop all transfers without locations.
+    
+    df_transfers = df_transfers.dropna(axis='rows')
+    
     print(str(len(df_transfers)) + ' transfers on the map.')
 
     # If there are transactions, proceed.
@@ -547,13 +556,12 @@ def map_pac():
 
     folium.LayerControl().add_to(m)
 
-    m.save('C:/Users/Gabriel/Desktop/map.html')
+    # Save the map output.
+
+    m.save('map.html')
 
     return
 
-# For saving the map output.
-
-m.save('C:/Users/Gabriel/Desktop/map2.html')
 
 ###############
 # FULL PLOTTING

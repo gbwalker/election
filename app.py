@@ -14,13 +14,7 @@ import pandas as pd
 import folium
 import json
 import pathlib
-
-# To use Postgres:
-# import os
-# import psycopg2
-# DATABASE_URL = os.environ['DATABASE_URL']
-# conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-
+from map_pac import map_pac
 
 ######
 # DATA
@@ -33,9 +27,15 @@ import pathlib
 # Load the pickled data.
 # zips = pickle.load(open(DATA_PATH.joinpath('zips'), 'rb'))
 
+df_committee = pd.read_pickle('data/df_committee')
+# df_individuals = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_individuals')
+# df_expenditures = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_expenditures')
+# df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
+# df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 # zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
-
-df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_candidate')
+# zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
+# state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
+# sf_states.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
 markdown_text = '''
 ### Dash and Markdown!!
@@ -47,19 +47,13 @@ Check out their [60 Second Markdown Tutorial](http://commonmark.org/help/)
 if this is your first introduction to Markdown!
 '''
 
-df = pd.read_csv(
-    'https://gist.githubusercontent.com/chriddyp/'
-    'c78bf172206ce24f77d6363a2d754b59/raw/'
-    'c353e8ef842413cae56ae3920b8fd78468aa4cb2/'
-    'usa-agricultural-exports-2011.csv')
-
 #######
 # STYLE
 #######
 # Use CSS from an external source. See details here about customization: https://dash.plot.ly/external-resources.
 # See HTML components: https://dash.plot.ly/dash-html-components.
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+style = ['C:/Users/Gabriel/Documents/Code/Python/repos/election/style.css']
 
 # Custom colors.
 
@@ -94,146 +88,93 @@ def generate_table(dataframe, max_rows=5):
 
 # See the core components gallery for input features... https://dash.plot.ly/dash-core-components.
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, external_stylesheets=style)
 
-app.layout = html.Div(id='root',
-    
-    # Add in custom colors/styling.
-    
-    style={'backgroundColor': colors['background']},
-    
+app.layout = html.Div(
+    id='root',
     children=[
-        
-        # Title and introductory text divider.
-        
         html.Div(
-            id="header",
+            id='header',
             children=[
-                html.H1(
-                    children='Hello Dash',
-                    style={
-                        'textAlign': 'left',
-                        'color': colors['text']
-                    }
-                ),
-                html.P(
-                    id='intro-text',
-                    children='Here is a paragraph of introductory text.'
-                ),
-                html.Div(
-                    children='Dash: A web application framework for Python.', 
-                    style={
-                    'textAlign': 'left',
-                    'color': colors['text']
-                    }
-                )
+                html.H1(children='The Coca-Cola Company Nonpartisan Committee For Good Government'),
+                html.Hr(),
+                dcc.Input(id='pac_entry_box', value='initial value', type='text')
             ],
         ),
         
-        # Main app container.
-        
         html.Div(
-            id="app-container",
+            id='app-container',
             children=[
-                
-                # Input container.
-            
                 html.Div(
-                    id="left-column",
+                    id='left-column',
                     children=[
+                        # Map container using an iFrame.
+                        
                         html.Div(
-                            id="slider-container",
+                            id='pac_map',
                             children=[
-                                html.P(
-                                    id="slider-text",
-                                    children="Drag the slider to change the year:",
-                                )
-                            ],
+                                html.P('Here is another paragraph description.', id='map-title'),
+                                html.Iframe(id='map',
+                                        srcDoc=open('map.html', 'r').read(),
+                                        width='60%',
+                                        height='600')
+                            ]
                         ),
-                    ]
+                    ],
                 ),
-                
-                # Map container.
-                # Use an iframe to hold it: https://medium.com/@shachiakyaagba_41915/integrating-folium-with-dash-5338604e7c56.
-                
                 html.Div(
-                    # id="heatmap-container",
-                    # children=[
-                    #     html.P(
-                    #         "Heatmap of age adjusted mortality rates \
-                    #             from poisonings in year {0}".format(min(YEARS)),
-                    #         id="heatmap-title",
-                    #     ),
-                    #     dcc.Graph(
-                    #         id="county-choropleth",
-                    #         figure=dict(
-                    #             data=[
-                    #                 dict(
-                    #                     lat=df_lat_lon["Latitude "],
-                    #                     lon=df_lat_lon["Longitude"],
-                    #                     text=df_lat_lon["Hover"],
-                    #                     type="scattermapbox",
-                    #                 )
-                    #             ],
-                    #             layout=dict(
-                    #                 mapbox=dict(
-                    #                     layers=[],
-                    #                     accesstoken=mapbox_access_token,
-                    #                     style=mapbox_style,
-                    #                     center=dict(lat=38.72490, lon=-95.61446),
-                    #                     pitch=0,
-                    #                     zoom=3.5
-                    #                 ),
-                    #                 autosize=True,
-                    #             ),
-                    #         ),
-                    #     )
-                    # ],
-                ),
-                
-                # dcc.Graph displays a plotly.js chart.
-
-                dcc.Graph(
-                        id='example-graph-2',
-                        figure={
-                            'data': [
-                                {'x': [1, 2, 3], 'y': [4, 1, 2], 'type': 'bar', 'name': 'SF'},
-                                {'x': [1, 2, 3], 'y': [2, 4, 5], 'type': 'bar', 'name': u'Montréal'},
-                            ],
-                            'layout': {
-                                'plot_bgcolor': colors['background'],
-                                'paper_bgcolor': colors['background'],
-                                'font': {
-                                    'color': colors['text']
+                    id='graph-container',
+                    children=[
+                        html.P(id='chart-selector', children='Select chart:'),
+                        dcc.Dropdown(
+                            options=[
+                                {
+                                    'label': 'Histogram of total number of deaths (single year)',
+                                    'value': 'show_absolute_deaths_single_year',
                                 }
-                            }
-                        }
-                    ),
+                            ],
+                            value='show_death_rate_single_year',
+                            id='chart-dropdown',
+                        ),
+                        dcc.Graph(
+                            id='selected-data',
+                            figure=dict(
+                                data=[dict(x=0, y=0)],
+                                layout=dict(
+                                    paper_bgcolor='#F4F4F8',
+                                    plot_bgcolor='#F4F4F8',
+                                    autofill=True,
+                                    margin=dict(t=75, r=50, b=100, l=50),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    ],
+)
                 
-                html.Hr(),
+#                 html.H4(children='US Agriculture Exports (2011)'), 
                 
-                # An HTML table.
+#                 generate_table(df_candidate),
                 
-                html.H4(children='US Agriculture Exports (2011)'), 
+#                 html.Hr(),
                 
-                generate_table(df_candidate),
+#                 # Sample Markdown text.
                 
-                html.Hr(),
+#                 dcc.Markdown(children=markdown_text),
                 
-                # Sample Markdown text.
+#                 html.Hr(),
                 
-                dcc.Markdown(children=markdown_text),
+#                 # A reactive text box.
                 
-                html.Hr(),
+#                 dcc.Input(id='my-id', value='initial value', type='text'),
                 
-                # A reactive text box.
-                
-                dcc.Input(id='my-id', value='initial value', type='text'),
-                
-                html.Div(id='my-div')
-            ]
-        ) 
-    ])
+#                 html.Div(id='my-div')
+#             ]
+#         ) 
+#     ])
 
 ###################
 # REACTIVE ELEMENTS
@@ -242,8 +183,8 @@ app.layout = html.Div(id='root',
 # A reactive text box. The functional component (i.e., function) that translates the input property into the output property is directly below.
 
 @app.callback(
-    Output(component_id='my-div', component_property='children'),
-    [Input(component_id='my-id', component_property='value')]
+    Output(component_id='header', component_property='children'),
+    [Input(component_id='pac_entry_box', component_property='value')]
 )
 def update_output_div(input_value):
     return 'You\'ve entered "{}" :)'.format(input_value)
