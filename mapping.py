@@ -32,7 +32,7 @@ df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 # zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
-sf_states.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
+sf_states = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
 ############
 # SHAPEFILES

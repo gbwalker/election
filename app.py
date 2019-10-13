@@ -37,6 +37,10 @@ df_committee = pd.read_pickle('data/df_committee')
 # state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 # sf_states.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
+# Create a dictionary list of choices to use in the dropdown menu.
+
+pac_choices = list(df_committee.sort_values(by='committee').apply(lambda x: {'label': x['committee'], 'value': x['committee']}, axis='columns'))
+
 markdown_text = '''
 ### Dash and Markdown!!
 
@@ -93,15 +97,25 @@ app = dash.Dash(__name__, external_stylesheets=style)
 app.layout = html.Div(
     id='root',
     children=[
+        
+        html.Div(id='output-container'),
+    
         html.Div(
             id='header',
             children=[
-                html.H1(children='The Coca-Cola Company Nonpartisan Committee For Good Government'),
                 html.Hr(),
-                dcc.Input(id='pac_entry_box', value='initial value', type='text')
+                dcc.Dropdown(
+                    id='pac-input-box',
+                    options=pac_choices,
+                    multi=False,
+                    clearable=False,
+                    value="Hallmark Cards Pac"
+                )
             ],
         ),
         
+        html.Hr(),
+                
         html.Div(
             id='app-container',
             children=[
@@ -183,11 +197,12 @@ app.layout = html.Div(
 # A reactive text box. The functional component (i.e., function) that translates the input property into the output property is directly below.
 
 @app.callback(
-    Output(component_id='header', component_property='children'),
-    [Input(component_id='pac_entry_box', component_property='value')]
+    Output(component_id='output-container', component_property='children'),
+    [Input(component_id='pac-input-box', component_property='value')]
 )
 def update_output_div(input_value):
-    return 'You\'ve entered "{}" :)'.format(input_value)
+    
+    return html.H1(children=input_value.upper())
 
 #############
 # RUN THE APP
