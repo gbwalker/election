@@ -7,6 +7,10 @@ import json
 
 def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_cc):
     
+    ###############
+    # PAC DONATIONS
+    ###############
+    
     # Filter transactions for just the ones that the PAC sent.
     # Also delete any null values.
     
@@ -164,12 +168,16 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
             fill_opacity=1
         ).add_to(contribution_layer)
 
+    ##################
+    # PAC TRANSACTIONS
+    ##################
+
     # Add a red dot for transactions sent by the PAC, not received.
     # Identify transactions of interest based on recipient zip codes.
     
     df_transfers = df_cc[df_cc.sender == pac][['city', 'state', 'zip', 'amount', 'date', 'recipient', 'image']]
     
-    # Drop all transfers without locations.
+    # Drop all transfers with missing information.
     
     df_transfers = df_transfers.dropna(axis='rows')
     
@@ -191,15 +199,46 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         
         # If there are no zip codes found, use the point associated with another zip code in the same city.
         
-        df_transfers_pointless = df_transfers[df_transfers.apply(lambda x: np.isnan(x['center']), axis='columns')]
+        df_transfers_pointless = df_transfers[df_transfers.apply(lambda x: str(x['center']) == 'nan', axis='columns')]
         
         if not df_transfers_pointless.empty:
+            
+            # Save the replacement points into a list.
+            
+            new_points = []
         
             for n in range(len(df_transfers_pointless)):
+                                
+                # If the zip code isn't in the zip code points list, find a random zip with the same city and state. If there's no city and state, use the center of the state.
                 
-                # If the zip code isn't in the zip code points list, find another zip with the same city and state. If there's no city and state, use the center of the state.
+                replacement_points = zip_points[(zip_points.state ==      df_transfers_pointless.state.iloc[n]) & (zip_points.city == df_transfers_pointless.city.iloc[n])]
                 
+                if not replacement_points.empty:
+                    
+                    new_points.append(replacement_points.sample(1).center.iloc[0])
                 
+                if replacement_points.empty:
+                    
+                    new_points.append(sf_states[sf_states.name == df_transfers_pointless.state.iloc[n]].geometry.centroid)
+
+            # Match the pointless index to the new points so they can be assigned correctly.
+            
+            new_points = pd.Series(new_points, index=df_transfers_pointless.index)
+
+            # Assign the new points to the pointless values.
+            
+            df_transfers_pointless = df_transfers_pointless.assign(center=pd.Series(new_points))
+
+            # Delete all blank values in the original list and merge back in replacements.
+            
+            df_transfers = pd.merge(df_transfers, df_transfers_pointless.center, how='outer', left_index=True, right_index=True)
+            
+            # Combine the two center columns.
+            
+            df_transfers = df_transfers.assign(center=df_transfers.center_x.fillna(df_transfers.center_y))
+            
+            del df_transfers['center_x']
+            del df_transfers['center_y']
             
         # Format amounts with a $ and comma.
         
