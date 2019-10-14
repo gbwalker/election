@@ -374,7 +374,7 @@ def map_pac():
     m = folium.Map(
         location=[39.5, -98.35],
         tiles=None,
-        zoom_start=5,
+        zoom_start=4,
         min_zoom=4,
         prefer_canvas=True,
         zoom_control=False,

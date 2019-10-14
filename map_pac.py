@@ -1,8 +1,11 @@
-def map_pac():
-    
-    # Select a PAC at random.
-        
-    pac = df_individuals.drop_duplicates(subset='recipient').recipient.sample(1).iloc[0]
+# This function produces an HTML map for the app to display.
+
+import numpy as np
+import pandas as pd
+import folium
+import json
+
+def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_cc):
     
     # Filter transactions for just the ones that the PAC sent.
     # Also delete any null values.
@@ -31,10 +34,12 @@ def map_pac():
         
         pac_zip_points = sf_states[sf_states.name.isin(states)].assign(geometry=sf_states.geometry.centroid)
         
+        pac_zip_points.columns = ['state', 'geometry']
+        
         # Merge in the center points by state.
         
         df = pd.merge(df, pac_zip_points, how='left', on='state')
-    
+        
     # Sum donations by state for creating a choropleth.
     
     df_state_totals = df.groupby('state').sum().reset_index()[['state', 'amount']]
@@ -56,9 +61,10 @@ def map_pac():
     m = folium.Map(
         location=[39.5, -98.35],
         tiles=None,
-        zoom_start=5,
+        zoom_start=4,
         min_zoom=4,
-        prefer_canvas=True
+        prefer_canvas=True,
+        zoom_control=False
         )
     
     folium.TileLayer(
@@ -163,6 +169,10 @@ def map_pac():
     
     df_transfers = df_cc[df_cc.sender == pac][['city', 'state', 'zip', 'amount', 'date', 'recipient', 'image']]
     
+    # Drop all transfers without locations.
+    
+    df_transfers = df_transfers.dropna(axis='rows')
+    
     # If there are transactions, proceed.
     
     if not df_transfers.empty:
@@ -177,8 +187,20 @@ def map_pac():
 
         # Add the center point to the information about the received transaction.
         
-        df_transfers = pd.merge(df_transfers, pac_zip_transfers[['zip', 'center']], how='left', on='zip').dropna(axis='rows')
+        df_transfers = pd.merge(df_transfers, pac_zip_transfers[['zip', 'center']], how='left', on='zip')
         
+        # If there are no zip codes found, use the point associated with another zip code in the same city.
+        
+        df_transfers_pointless = df_transfers[df_transfers.apply(lambda x: np.isnan(x['center']), axis='columns')]
+        
+        if not df_transfers_pointless.empty:
+        
+            for n in range(len(df_transfers_pointless)):
+                
+                # If the zip code isn't in the zip code points list, find another zip with the same city and state. If there's no city and state, use the center of the state.
+                
+                
+            
         # Format amounts with a $ and comma.
         
         df_transfers = df_transfers.assign(amount='$' + df_transfers.apply(lambda x: "{:,}".format(x['amount']), axis=1))
@@ -230,5 +252,3 @@ def map_pac():
     # Save the map output.
 
     m.save('map.html')
-
-    return
