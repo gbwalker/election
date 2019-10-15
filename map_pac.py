@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import folium
+from folium.plugins import MarkerCluster
 import json
 
 def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_cc):
@@ -68,7 +69,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         zoom_start=4,
         min_zoom=4,
         prefer_canvas=True,
-        zoom_control=False
+        zoom_control=True
         )
     
     folium.TileLayer(
@@ -105,6 +106,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         name='State donations',
         show=True,
         control=False,
+        smooth_factor=0.8,
         style_function=lambda feature: {
             'color': 'black',
             'weight': 0.25,
@@ -121,6 +123,13 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
     # Start with a layer for contributions.
     
     contribution_layer = folium.FeatureGroup(name='Contributions').add_to(m)
+    
+    # contribution_layer = MarkerCluster(
+    #     name='Contributions',
+    #     options={'maxClusterRadius': 8, 
+    #              'showCoverageOnHover': 'true',
+    #              'spiderfyDistanceMultiplier': 3}
+    #     ).add_to(m)
     
     # Format the donation amounts with a dollar sign and comma.
     
@@ -149,7 +158,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         
         zip_code = str(df.zip.iloc[n])
         
-        link = '<a href=\"https://docquery.fec.gov/cgi-bin/fecimg/?' + str(df.image.iloc[n]) + '\" target=\"_blank\">Documentation</a>'
+        link = '<a href=\"https://docquery.fec.gov/cgi-bin/fecimg/?' + str(df.image.iloc[n]) + '\" target=\"_blank\">Donation record</a>'
         
         # Create a popup with the link to the reference document.
         
@@ -188,6 +197,13 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         # Make another layer for transactions, not donations.
         
         transfer_layer = folium.FeatureGroup(name='Transfers').add_to(m)
+
+        # transfer_layer = MarkerCluster(
+        #     name='Transfers',
+        #     options={'maxClusterRadius': 8, 
+        #          'showCoverageOnHover': 'true',
+        #          'spiderfyDistanceMultiplier': 3}
+        #     ).add_to(m)
 
         # Find zips where funds were transfered to.
         
@@ -267,7 +283,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
             
             zip_code = str(df_transfers.zip.iloc[n])
                     
-            link = '<a href=\"https://docquery.fec.gov/cgi-bin/fecimg/?' + str(df_transfers.image.iloc[n]) + '\" target=\"_blank\">Documentation</a>'
+            link = '<a href=\"https://docquery.fec.gov/cgi-bin/fecimg/?' + str(df_transfers.image.iloc[n]) + '\" target=\"_blank\">Transfer record</a>'
             
             # Create a popup with the link to the reference document.
             
@@ -286,8 +302,14 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
                 fill_opacity=1
             ).add_to(transfer_layer)
 
+    # Add a layer control button for the donations and transfers.
+
     folium.LayerControl().add_to(m)
 
-    # Save the map output.
+    # Return the HTML of the map.
 
-    m.save('map.html')
+    return m.get_root().render()
+
+# Use this to save the map output.
+
+# m.save('map.html')

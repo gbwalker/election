@@ -109,8 +109,8 @@ app.layout = html.Div(
                     id='pac-input-box',
                     options=pac_choices,
                     multi=False,
-                    clearable=False,
-                    value="Hallmark Cards Pac"
+                    searchable=False,
+                    value='Hallmark Cards Pac'
                 )
             ],
         ),
@@ -205,9 +205,11 @@ def update_output_div(input_value):
 )
 def update_map(input_value):
     
-    map_pac(input_value, df_individuals, zip_points, sf_states, state_abbreviations, df_cc)
-    
-    return html.Iframe(srcDoc=open('map.html', 'r').read(), width='60%', height='600')
+    return html.Iframe(
+        srcDoc=map_pac(input_value, df_individuals, zip_points, sf_states, state_abbreviations, df_cc), 
+        width='60%', 
+        height='600'
+        )
 
 #############
 # RUN THE APP
