@@ -31,6 +31,7 @@ df_committee = pd.read_pickle('data/df_committee')
 df_individuals = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_individuals')
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
+zip_bounds = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_bounds')
 state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 sf_states = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
@@ -206,7 +207,7 @@ def update_output_div(input_value):
 def update_map(input_value):
     
     return html.Iframe(
-        srcDoc=map_pac(input_value, df_individuals, zip_points, sf_states, state_abbreviations, df_cc), 
+        srcDoc=map_pac(input_value, df_individuals, zip_bounds, sf_states, state_abbreviations, df_cc), 
         width='60%', 
         height='600'
         )

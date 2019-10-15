@@ -6,7 +6,7 @@ import folium
 from folium.plugins import MarkerCluster
 import json
 
-def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_cc):
+def map_pac(pac, df_individuals, zip_bounds, sf_states, state_abbreviations, df_cc):
     
     ###############
     # PAC DONATIONS
@@ -19,7 +19,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
      
     # Get the zip codes and states from which individuals have contributed OR where the PAC has sent funds.
     
-    pac_zip_points = zip_points[zip_points.zip.astype('int').isin(list(df.zip.values.astype('int')))].dropna(axis='rows')[['zip', 'center']]
+    pac_zip_points = zip_bounds[zip_bounds.zip.astype('int').isin(list(df.zip.values.astype('int')))].dropna(axis='rows')[['zip', 'bounds']]
     
     states = df_individuals[df_individuals.recipient == pac].state.drop_duplicates().dropna(axis='rows')
     
@@ -39,7 +39,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         
         pac_zip_points = sf_states[sf_states.name.isin(states)].assign(geometry=sf_states.geometry.centroid)
         
-        pac_zip_points.columns = ['state', 'geometry']
+        pac_zip_points.columns = ['state', 'bounds']
         
         # Merge in the center points by state.
         
@@ -135,16 +135,30 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
     
     df = df.assign(amount='$' + df.apply(lambda x: "{:,}".format(x['amount']), axis=1))
     
-    # Make a custom jitter function for the coordinates of the points.
-    
-    def jitter(n):
-        
-        return n * (1 + np.random.rand() * .001)
+    # Plot each donation point.
     
     for n in range(len(df)):
         
-        # Assign the amount, name, etc. to display.
-        # Get the state abbreviation with the state mapping.
+        # If the location of the donation is a point, set the coordinates to that.
+            
+        if len(df.bounds.iloc[n]) == 1:
+                
+            y_coord = float(df.bounds.iloc[n].y)
+                
+            x_coord = float(df.bounds.iloc[n].x)
+
+        # Otherwise, get the boundaries of the zip code.
+
+        else:
+        
+            x_min, y_min, x_max, y_max = df.bounds.iloc[n]
+            
+            # Assign the amount, name, etc. to display.
+            # Get the state abbreviation with the state mapping.
+            
+            y_coord = float(np.random.uniform(y_min, y_max, 1))
+            
+            x_coord = float(np.random.uniform(x_min, x_max, 1))
         
         amount = df.amount.iloc[n]
         
@@ -167,7 +181,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         # Plot the points.
         
         folium.CircleMarker(
-            location=(jitter(df.center.iloc[n].y), jitter(df.center.iloc[n].x)),
+            location=(y_coord, x_coord),
             tooltip=(amount + '<br/>' + date + '<br/>' + name + '<br/>' + city + ', ' + state + ' ' + zip_code),
             popup=popup_link,
             radius=4,
@@ -207,54 +221,54 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
 
         # Find zips where funds were transfered to.
         
-        pac_zip_transfers = zip_points[zip_points.zip.astype('int').isin(list(df_transfers.zip.values.astype('int')))]
+        pac_zip_transfers = zip_bounds[zip_bounds.zip.astype('int').isin(list(df_transfers.zip.values.astype('int')))]
 
         # Add the center point to the information about the received transaction.
         
-        df_transfers = pd.merge(df_transfers, pac_zip_transfers[['zip', 'center']], how='left', on='zip')
+        df_transfers = pd.merge(df_transfers, pac_zip_transfers[['zip', 'bounds']], how='left', on='zip')
         
         # If there are no zip codes found, use the point associated with another zip code in the same city.
         
-        df_transfers_pointless = df_transfers[df_transfers.apply(lambda x: str(x['center']) == 'nan', axis='columns')]
+        df_transfers_boundless = df_transfers[df_transfers.apply(lambda x: str(x['bounds']) == 'nan', axis='columns')]
         
-        if not df_transfers_pointless.empty:
+        if not df_transfers_boundless.empty:
             
-            # Save the replacement points into a list.
+            # Save the replacement bounds into a list.
             
-            new_points = []
+            new_bounds = []
         
-            for n in range(len(df_transfers_pointless)):
-                                
+            for n in range(len(df_transfers_boundless)):
+                
                 # If the zip code isn't in the zip code points list, find a random zip with the same city and state. If there's no city and state, use the center of the state.
                 
-                replacement_points = zip_points[(zip_points.state ==      df_transfers_pointless.state.iloc[n]) & (zip_points.city == df_transfers_pointless.city.iloc[n])]
+                replacement_bounds = zip_bounds[(zip_bounds.state ==      df_transfers_boundless.state.iloc[n]) & (zip_bounds.city == df_transfers_boundless.city.iloc[n])]
                 
-                if not replacement_points.empty:
+                if not replacement_bounds.empty:
                     
-                    new_points.append(replacement_points.sample(1).center.iloc[0])
+                    new_bounds.append(replacement_bounds.sample(1).bounds.iloc[0])
                 
-                if replacement_points.empty:
+                if replacement_bounds.empty:
                     
-                    new_points.append(sf_states[sf_states.name == df_transfers_pointless.state.iloc[n]].geometry.centroid)
+                    new_bounds.append(sf_states[sf_states.name == df_transfers_boundless.state.iloc[n]].geometry.centroid)
 
             # Match the pointless index to the new points so they can be assigned correctly.
             
-            new_points = pd.Series(new_points, index=df_transfers_pointless.index)
+            new_bounds = pd.Series(new_bounds, index=df_transfers_boundless.index)
 
             # Assign the new points to the pointless values.
             
-            df_transfers_pointless = df_transfers_pointless.assign(center=pd.Series(new_points))
+            df_transfers_boundless = df_transfers_boundless.assign(bounds=pd.Series(new_bounds))
 
             # Delete all blank values in the original list and merge back in replacements.
             
-            df_transfers = pd.merge(df_transfers, df_transfers_pointless.center, how='outer', left_index=True, right_index=True)
+            df_transfers = pd.merge(df_transfers, df_transfers_boundless.bounds, how='outer', left_index=True, right_index=True)
             
             # Combine the two center columns.
             
-            df_transfers = df_transfers.assign(center=df_transfers.center_x.fillna(df_transfers.center_y))
+            df_transfers = df_transfers.assign(bounds=df_transfers.bounds_x.fillna(df_transfers.bounds_y))
             
-            del df_transfers['center_x']
-            del df_transfers['center_y']
+            del df_transfers['bounds_x']
+            del df_transfers['bounds_y']
             
         # Format amounts with a $ and comma.
         
@@ -267,6 +281,27 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
         # Plot all the sent transactions.
         
         for n in range(len(df_transfers)):
+            
+            # If the location of the donation is a point, set the coordinates to that.
+            
+            if len(df_transfers.bounds.iloc[n]) == 1:
+                
+                y_coord = float(df_transfers.bounds.iloc[n].y)
+                
+                x_coord = float(df_transfers.bounds.iloc[n].x)
+            
+            # Get the boundaries of the zip code.
+        
+            else:
+        
+                x_min, y_min, x_max, y_max = df_transfers.bounds.iloc[n]
+            
+                # Assign the amount, name, etc. to display.
+                # Get the state abbreviation with the state mapping.
+            
+                y_coord = float(np.random.uniform(y_min, y_max, 1))
+            
+                x_coord = float(np.random.uniform(x_min, x_max, 1))
             
             # Assign the amount, name, etc. to display.
             # Get the state abbreviation with the state mapping.
@@ -292,7 +327,7 @@ def map_pac(pac, df_individuals, zip_points, sf_states, state_abbreviations, df_
             # Then add the marker.
             
             folium.CircleMarker(
-                location=(jitter(df_transfers.center.iloc[n].y), jitter(df_transfers.center.iloc[n].x)),
+                location=(y_coord, x_coord),
                 tooltip=(recipient + '<br/>' + amount + '<br/>' + date + '<br/>' + city + ', ' + state + ' ' + zip_code),
                 popup=popup_link,
                 radius=4,

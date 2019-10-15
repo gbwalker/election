@@ -31,6 +31,7 @@ df_candidate = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cand
 df_cc = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/df_cc')
 # zips = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
 zip_points = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
+zip_bounds = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_bounds')
 state_abbreviations = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/state_abbreviations')
 sf_states = pd.read_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/sf_states')
 
@@ -216,9 +217,19 @@ zips.loc[dc.index] = dc
 
 zip_points = zips[['zip', 'state', 'city', 'center']]
 
+# Add the bounds of all of the zips.
+
+zips = zips.assign(bounds=zips.apply(lambda x: x['geometry'].bounds, axis='columns'))
+
+# Save just the zips and their bounds.
+
+zip_bounds = zips[['zip', 'state', 'city', 'bounds']]
+
 # Save the zip shapefiles along with the cleaned data.
 
 zips.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zips')
+
+zip_bounds.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_bounds')
 
 zip_points.to_pickle('C:/Users/Gabriel/Desktop/FEC/cleaned_data/zip_points')
 
