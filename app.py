@@ -7,6 +7,7 @@
 
 import dash
 import dash_core_components as dcc
+import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import numpy as np
@@ -207,7 +208,7 @@ def update_output_div(input_value):
 def update_map(input_value):
     
     return html.Iframe(
-        srcDoc=map_pac(input_value, df_individuals, zip_bounds, sf_states, state_abbreviations, df_cc), 
+        srcDoc=map_pac(input_value, df_individuals, zip_bounds, zip_points, sf_states, state_abbreviations, df_cc), 
         width='60%', 
         height='600'
         )
